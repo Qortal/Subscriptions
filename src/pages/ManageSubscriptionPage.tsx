@@ -26,18 +26,25 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useAtom, useAtomValue } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
 import { useGlobal, usePublish } from 'qapp-core';
 import {
   buildSubscriptionIdentifiers,
+  buildUpdatedDetails,
   getSubscriptionIdForGroup,
   updateSubscription,
   type UpdateSubscriptionForm,
 } from '../lib/subscriptionPublishing';
 import type { SubscriptionFullDetails } from '../types/subscription';
 import { useGroupMembers } from '../hooks/useGroupMembers';
+import {
+  cachePendingSubscription,
+  pendingOwnerActionsAtom,
+  type PendingOwnerAction,
+} from '../lib/pendingTransactionsCache';
 import {
   useFetchPrimaryNames,
   useGetDisplayName,
@@ -46,7 +53,7 @@ import { useSubscriberPaymentStatus } from '../hooks/useSubscriberPaymentStatus'
 import { useGroupJoinRequests } from '../hooks/useGroupJoinRequests';
 import { useValidateJoinRequests } from '../hooks/useValidateJoinRequests';
 import { useValidateGroupKeys } from '../hooks/useValidateGroupKeys';
-import { inviteToGroup } from '../lib/subscriptionPayment';
+import { inviteToGroup, kickFromGroup } from '../lib/subscriptionPayment';
 
 type AnyGroup = Record<string, unknown>;
 
@@ -78,6 +85,11 @@ export function ManageSubscriptionPage() {
   const { auth, identifierOperations } = useGlobal();
   const { fetchPublish, publishMultipleResources } = usePublish(3, 'JSON');
 
+  // Use atom for reactive owner actions cache
+  const [pendingOwnerActions, setPendingOwnerActions] = useAtom(
+    pendingOwnerActionsAtom
+  );
+
   const groupId = groupIdParam ? Number(groupIdParam) : null;
   const groupInfo = useMemo(
     () =>
@@ -105,6 +117,24 @@ export function ManageSubscriptionPage() {
   const { joinRequests, loading: joinRequestsLoading } =
     useGroupJoinRequests(groupId);
 
+  // Filter out join requests that have pending invites in cache
+  const filteredJoinRequests = useMemo(() => {
+    if (!groupId) return joinRequests;
+
+    return joinRequests.filter((request) => {
+      // Check if there's a pending invite for this user in the reactive atom
+      const pendingInvite = pendingOwnerActions.find(
+        (action) =>
+          action.type === 'invite' &&
+          action.groupId === groupId &&
+          action.inviteeAddress === request.joiner &&
+          action.expiresAt > Date.now()
+      );
+      // Only show if there's no pending invite
+      return !pendingInvite;
+    });
+  }, [joinRequests, groupId, pendingOwnerActions]);
+
   // Fetch primary names for all members (excluding owner)
   const memberAddresses = useMemo(
     () =>
@@ -117,15 +147,30 @@ export function ManageSubscriptionPage() {
 
   // Fetch primary names for join requesters
   const joinRequesterAddresses = useMemo(
-    () => joinRequests.map((jr) => jr.joiner),
-    [joinRequests]
+    () => filteredJoinRequests.map((jr) => jr.joiner),
+    [filteredJoinRequests]
   );
   useFetchPrimaryNames(joinRequesterAddresses);
 
   const getDisplayName = useGetDisplayName();
 
-  // Validate group keys
-  const shouldReEncryptGroupKeys = useValidateGroupKeys(groupId!);
+  // Validate group keys - pass pending re-encrypt from atom
+  const pendingReEncrypt = useMemo(() => {
+    if (!groupId) return null;
+    return (
+      pendingOwnerActions.find(
+        (action) =>
+          action.type === 're-encrypt' &&
+          action.groupId === groupId &&
+          action.expiresAt > Date.now()
+      ) ?? null
+    );
+  }, [groupId, pendingOwnerActions]);
+
+  const shouldReEncryptGroupKeys = useValidateGroupKeys(
+    groupId!,
+    pendingReEncrypt
+  );
 
   const [details, setDetails] = useState<SubscriptionFullDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -187,6 +232,7 @@ export function ManageSubscriptionPage() {
   } = useValidateJoinRequests(joinRequesterAddresses, detailsIdentifier);
 
   const [invitingUser, setInvitingUser] = useState<string | null>(null);
+  const [kickingUser, setKickingUser] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,10 +296,23 @@ export function ManageSubscriptionPage() {
     didInitFormRef.current = true;
   }, [details]);
 
-  // Transform members into displayable format (excluding owner)
+  // Transform members into displayable format (excluding owner and pending kicks)
   const displayMembers = useMemo(() => {
     return members
-      .filter((member) => member.member !== groupOwnerAddress)
+      .filter((member) => {
+        if (member.member === groupOwnerAddress) return false;
+
+        // Check if there's a pending kick for this member
+        const pendingKick = pendingOwnerActions.find(
+          (action) =>
+            action.type === 'kick' &&
+            action.groupId === groupId &&
+            action.kickedAddress === member.member &&
+            action.expiresAt > Date.now()
+        );
+
+        return !pendingKick;
+      })
       .map((member) => ({
         address: member.member,
         name: getDisplayName(member.member),
@@ -262,7 +321,15 @@ export function ManageSubscriptionPage() {
         isPaidUp: isPaid(member.member),
         isInGrace: isInGracePeriod(member.member),
       }));
-  }, [members, groupOwnerAddress, getDisplayName, isPaid, isInGracePeriod]);
+  }, [
+    members,
+    groupOwnerAddress,
+    getDisplayName,
+    isPaid,
+    isInGracePeriod,
+    pendingOwnerActions,
+    groupId,
+  ]);
 
   const filteredMembers = useMemo(() => {
     if (!showUnpaidOnly) return displayMembers;
@@ -309,6 +376,18 @@ export function ManageSubscriptionPage() {
         publishMultipleResources,
       });
 
+      // Cache the pending subscription update
+      cachePendingSubscription({
+        type: 'update',
+        subscriptionId,
+        groupId: groupId ?? 0,
+        ownerName: auth.name,
+        ownerAddress: auth.address ?? undefined,
+        detailsIdentifier: result.detailsIdentifier,
+        indexIdentifier: result.indexIdentifier ?? undefined,
+        details: buildUpdatedDetails(updateForm),
+      });
+
       // Reload the details to get the updated version with new states
       const res = await fetchPublish({
         name: auth.name,
@@ -346,6 +425,33 @@ export function ManageSubscriptionPage() {
     try {
       setInvitingUser(address);
       await inviteToGroup(groupId, address);
+
+      // Add to pending owner actions atom (reactive)
+      if (auth?.address) {
+        const now = Date.now();
+        const newAction: PendingOwnerAction = {
+          type: 'invite',
+          groupId,
+          ownerAddress: auth.address,
+          inviteeAddress: address,
+          timestamp: now,
+          expiresAt: now + 3 * 60 * 1000, // 3 minutes
+        };
+
+        // Remove any existing invite for this user, then add new one
+        setPendingOwnerActions((prev) => {
+          const filtered = prev.filter(
+            (action) =>
+              !(
+                action.type === 'invite' &&
+                action.groupId === groupId &&
+                action.inviteeAddress === address
+              )
+          );
+          return [...filtered, newAction];
+        });
+      }
+
       setSnackbarMsg(
         `Successfully invited ${getDisplayName(address)} to the group!`
       );
@@ -376,6 +482,30 @@ export function ManageSubscriptionPage() {
         action: 'REENCRYPT_GROUP_KEYS',
         groupId: groupId,
       });
+
+      // Add to pending owner actions atom (reactive)
+      if (auth?.address) {
+        const now = Date.now();
+        const newAction: PendingOwnerAction = {
+          type: 're-encrypt',
+          groupId,
+          ownerAddress: auth.address,
+          memberCount: memberCount || 0,
+          reEncryptTimestamp: now,
+          timestamp: now,
+          expiresAt: now + 3 * 60 * 1000, // 3 minutes
+        };
+
+        // Remove any existing re-encrypt for this group, then add new one
+        setPendingOwnerActions((prev) => {
+          const filtered = prev.filter(
+            (action) =>
+              !(action.type === 're-encrypt' && action.groupId === groupId)
+          );
+          return [...filtered, newAction];
+        });
+      }
+
       setSnackbarMsg('Successfully re-encrypted group keys!');
       setSnackbarOpen(true);
     } catch (e: any) {
@@ -383,6 +513,60 @@ export function ManageSubscriptionPage() {
       setSnackbarOpen(true);
     } finally {
       setIsReencrypting(false);
+    }
+  }
+
+  async function handleKickMember(address: string) {
+    if (groupId === null) {
+      setSnackbarMsg('Invalid group ID');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    try {
+      setKickingUser(address);
+      await kickFromGroup(groupId, address, 'Payment overdue');
+
+      // Add to pending owner actions atom (reactive)
+      if (auth?.address) {
+        const now = Date.now();
+        const newAction: PendingOwnerAction = {
+          type: 'kick',
+          groupId,
+          ownerAddress: auth.address,
+          kickedAddress: address,
+          timestamp: now,
+          expiresAt: now + 3 * 60 * 1000, // 3 minutes
+        };
+
+        // Remove any existing kick for this user, then add new one
+        setPendingOwnerActions((prev) => {
+          const filtered = prev.filter(
+            (action) =>
+              !(
+                action.type === 'kick' &&
+                action.groupId === groupId &&
+                action.kickedAddress === address
+              )
+          );
+          return [...filtered, newAction];
+        });
+      }
+
+      setSnackbarMsg(
+        `Successfully kicked ${getDisplayName(address)} from the group!`
+      );
+      setSnackbarOpen(true);
+
+      // Refresh data after a short delay
+      setTimeout(() => {
+        setRefreshKey((prev) => prev + 1);
+      }, 2000);
+    } catch (e: any) {
+      setSnackbarMsg(e?.message ?? 'Failed to kick member');
+      setSnackbarOpen(true);
+    } finally {
+      setKickingUser(null);
     }
   }
 
@@ -645,11 +829,13 @@ export function ManageSubscriptionPage() {
                       <TableCell>Joined</TableCell>
                       <TableCell align="right">Role</TableCell>
                       <TableCell align="right">Status</TableCell>
+                      <TableCell align="right">Action</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {filteredMembers.map((m) => {
                       const joinedDate = new Date(m.joined);
+                      const isKicking = kickingUser === m.address;
                       return (
                         <TableRow key={m.address} hover>
                           <TableCell>
@@ -701,6 +887,19 @@ export function ManageSubscriptionPage() {
                               variant="outlined"
                             />
                           </TableCell>
+                          <TableCell align="right">
+                            {!m.isPaidUp && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                disabled={isKicking || !!kickingUser}
+                                onClick={() => handleKickMember(m.address)}
+                              >
+                                {isKicking ? 'Kicking...' : 'Kick'}
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -720,7 +919,7 @@ export function ManageSubscriptionPage() {
                 alignItems={{ xs: 'flex-start', sm: 'center' }}
               >
                 <Typography variant="h6" fontWeight={800}>
-                  Join Requests ({joinRequests.length})
+                  Join Requests ({filteredJoinRequests.length})
                   {validatingJoinRequests && (
                     <Typography
                       component="span"
@@ -739,7 +938,7 @@ export function ManageSubscriptionPage() {
                 <Typography sx={{ opacity: 0.8 }}>
                   Loading join requests...
                 </Typography>
-              ) : joinRequests.length === 0 ? (
+              ) : filteredJoinRequests.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
                   No pending join requests.
                 </Typography>
@@ -755,7 +954,7 @@ export function ManageSubscriptionPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {joinRequests.map((request) => {
+                    {filteredJoinRequests.map((request) => {
                       const validation = getValidation(request.joiner);
                       const displayName = getDisplayName(request.joiner);
                       const isInviting = invitingUser === request.joiner;
@@ -858,7 +1057,7 @@ export function ManageSubscriptionPage() {
                 </Table>
               )}
 
-              {joinRequests.length > 0 && (
+              {filteredJoinRequests.length > 0 && (
                 <Alert severity="info" sx={{ mt: 2 }}>
                   Only users who have paid and published their subscription
                   record can be invited to the group.

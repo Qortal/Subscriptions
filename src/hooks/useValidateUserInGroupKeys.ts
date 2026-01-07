@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+
+// @ts-ignore - qortalRequest is available globally
+declare const qortalRequest: (params: any) => Promise<any>;
 
 export function base64ToUint8Array(base64: string) {
   const binaryString = atob(base64);
@@ -56,11 +59,11 @@ export const getGroupAdmins = async (groupNumber: number) => {
     `/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  const members: any = [];
-  const membersAddresses = [];
-  const both = [];
+  const members: any[] = [];
+  const membersAddresses: any[] = [];
+  const both: any[] = [];
 
-  const getMemNames = groupData?.members?.map(async (member) => {
+  const getMemNames = groupData?.members?.map(async (member: any) => {
     if (member?.member) {
       const name = await getNameInfo(member.member);
       if (name) {
@@ -91,7 +94,6 @@ export const useValidateUserInGroupKeys = (groupId: number) => {
   useEffect(() => {
     if (!groupId) return;
 
-    let cancelled = false;
     async function fetchData() {
       setIsLoading(true);
       try {
@@ -129,9 +131,6 @@ export const useValidateUserInGroupKeys = (groupId: number) => {
     }
 
     fetchData();
-    return () => {
-      cancelled = true;
-    };
 
     // TODO: Implement group keys validation logic
   }, [groupId]);

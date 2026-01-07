@@ -1,4 +1,5 @@
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -7,8 +8,10 @@ import {
   Chip,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useEffect, useMemo, useState } from 'react';
 import { useGlobal, usePublish } from 'qapp-core';
 import {
@@ -16,6 +19,7 @@ import {
   getSubscriptionIdForGroup,
 } from '../lib/subscriptionPublishing';
 import type { SubscriptionFullDetails } from '../types/subscription';
+import { useManagedSubscriptionActions } from '../hooks/useManagedSubscriptionActions';
 
 type AnyGroup = Record<string, unknown>;
 
@@ -54,6 +58,8 @@ export function ManagedSubscriptionCard(props: {
     () => (groupId !== null ? getSubscriptionIdForGroup(groupId) : null),
     [groupId]
   );
+  
+  const { actions, loading: actionsLoading } = useManagedSubscriptionActions(groupId);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,8 +134,8 @@ export function ManagedSubscriptionCard(props: {
       ? Math.round((gross / 12) * 100) / 100
       : Math.round(gross * 100) / 100;
 
-  // TODO: Calculate unpaid count from subscriber data
-  const unpaidCount = 0;
+  // Get unpaid count from actions hook
+  const unpaidCount = actions.unpaidMembersCount;
 
   if (detailsLoading) {
     return (
@@ -180,9 +186,33 @@ export function ManagedSubscriptionCard(props: {
           alignItems={{ xs: 'flex-start', sm: 'center' }}
         >
           <Box>
-            <Typography variant="h6" fontWeight={800}>
-              {title}
-            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="h6" fontWeight={800}>
+                {title}
+              </Typography>
+              {actions.totalActions > 0 && (
+                <Tooltip 
+                  title={
+                    <Box>
+                      {actions.pendingJoinRequests > 0 && (
+                        <div>{actions.pendingJoinRequests} pending join request{actions.pendingJoinRequests !== 1 ? 's' : ''}</div>
+                      )}
+                      {actions.needsReEncryption && (
+                        <div>Keys need re-encryption</div>
+                      )}
+                    </Box>
+                  }
+                >
+                  <Badge 
+                    badgeContent={actions.totalActions} 
+                    color="error"
+                    sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem' } }}
+                  >
+                    <NotificationsActiveIcon color="error" fontSize="small" />
+                  </Badge>
+                </Tooltip>
+              )}
+            </Stack>
             <Typography sx={{ opacity: 0.8 }}>
               {priceQort} QORT / {billingInterval}
             </Typography>
@@ -224,8 +254,9 @@ export function ManagedSubscriptionCard(props: {
           variant="contained"
           onClick={() => groupId !== null && onManage(groupId)}
           disabled={groupId === null}
+          color={actions.totalActions > 0 ? 'error' : 'primary'}
         >
-          Manage
+          Manage{actions.totalActions > 0 && ` (${actions.totalActions} action${actions.totalActions !== 1 ? 's' : ''})`}
         </Button>
       </CardActions>
     </Card>

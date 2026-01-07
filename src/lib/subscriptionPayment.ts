@@ -72,6 +72,28 @@ export async function inviteToGroup(
 }
 
 /**
+ * Kick a member from a group
+ */
+export async function kickFromGroup(
+  groupId: number,
+  memberAddress: string,
+  reason?: string
+): Promise<void> {
+  try {
+    const response = await qortalRequest({
+      action: 'KICK_FROM_GROUP',
+      groupId: groupId,
+      qortalAddress: memberAddress,
+      reason: reason || 'Payment overdue',
+    });
+
+    console.log('Member kicked successfully', response);
+  } catch (error: any) {
+    throw new Error(error?.message ?? 'Failed to kick member from group');
+  }
+}
+
+/**
  * Publish subscription record on-chain
  * Uses PRODUCT service with the same identifier as the details (but different service)
  */

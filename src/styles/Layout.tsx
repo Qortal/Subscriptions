@@ -2,9 +2,11 @@ import { AppBar, Box, Button, Container, Toolbar, Typography } from '@mui/materi
 import { useGlobal } from 'qapp-core';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useIframe } from '../hooks/useIframeListener';
+import { useCacheCleanup } from '../hooks/useCacheCleanup';
 
 const Layout = () => {
   useIframe();
+  useCacheCleanup(); // Automatically clean up confirmed transactions from cache
   const navigate = useNavigate();
   const { auth } = useGlobal();
 

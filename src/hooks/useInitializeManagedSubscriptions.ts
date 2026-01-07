@@ -5,6 +5,7 @@ import {
   buildSubscriptionIdentifiers,
   getSubscriptionIdForGroup,
 } from '../lib/subscriptionPublishing';
+import { getPendingSubscription } from '../lib/pendingTransactionsCache';
 
 function getGroupId(group: any): number | null {
   const id = group?.groupId;
@@ -87,7 +88,26 @@ export function useInitializeManagedSubscriptions(refreshKey = 0) {
             });
 
             // Check if we have a match and it has a version suffix
-            if (!matches || matches.length === 0) return null;
+            if (!matches || matches.length === 0) {
+              // Check pending cache for newly created subscriptions
+              const pendingSubscription = getPendingSubscription(subscriptionId, ownerName);
+              if (pendingSubscription) {
+                // Return the group info for pending subscription
+                let groupInfo;
+                try {
+                  const res = await fetch(`/groups/${groupId}`);
+                  if (res.ok) {
+                    const data = await res.json();
+                    groupInfo = data;
+                  }
+                } catch {
+                  console.error('Error fetching group', groupId);
+                  return null;
+                }
+                return groupInfo;
+              }
+              return null;
+            }
 
             const latestResource = matches[0];
             const latestIdentifier = latestResource?.identifier;

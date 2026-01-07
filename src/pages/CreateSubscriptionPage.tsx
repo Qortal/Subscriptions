@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobal, usePublish } from 'qapp-core';
 import { useOwnedGroups } from '../hooks/useOwnedGroups';
+import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
 import {
   buildFullDetails,
   buildOnChainIndex,
@@ -30,6 +31,7 @@ import {
   type CreateSubscriptionForm,
 } from '../lib/subscriptionPublishing';
 import { useTestIdentifiers } from '../constants';
+import { cachePendingSubscription } from '../lib/pendingTransactionsCache';
 
 function isValidAmountInput(value: string) {
   // allow "", "1", "1.", "1.2", "1.23" (max 2 decimals)
@@ -45,6 +47,8 @@ export function CreateSubscriptionPage() {
   const { auth, identifierOperations, lists } = useGlobal();
   const { publishMultipleResources } = usePublish();
   const { ownedGroups, loading, error } = useOwnedGroups();
+  const { managedSubscriptions, loading: managedLoading } =
+    useInitializeManagedSubscriptions();
 
   const [activeStep, setActiveStep] = useState(0);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -54,16 +58,44 @@ export function CreateSubscriptionPage() {
   const ownerName = auth?.name ?? 'unknown-owner';
   const ownerAddress = auth?.address ?? undefined;
 
+  // Get group IDs that already have subscriptions
+  const managedGroupIds = useMemo(() => {
+    return managedSubscriptions
+      .map((g: any) => {
+        const idRaw = g?.groupId ?? g?.id;
+        const id =
+          typeof idRaw === 'string' && /^\d+$/.test(idRaw)
+            ? Number(idRaw)
+            : idRaw;
+        return typeof id === 'number' && Number.isFinite(id) ? id : null;
+      })
+      .filter((id): id is number => id !== null);
+  }, [managedSubscriptions]);
+
+  // Filter out groups that already have subscriptions
+  const availableGroups = useMemo(() => {
+    return ownedGroups.filter((g: any) => {
+      const idRaw = g?.groupId ?? g?.id;
+      const id =
+        typeof idRaw === 'string' && /^\d+$/.test(idRaw)
+          ? Number(idRaw)
+          : idRaw;
+      if (typeof id !== 'number' || !Number.isFinite(id)) return false;
+      return !managedGroupIds.includes(id);
+    });
+  }, [ownedGroups, managedGroupIds]);
+
   const [groupId, setGroupId] = useState<number>(0);
   const group = useMemo(() => {
     const match =
-      ownedGroups.find((g: any) => Number(g?.groupId ?? g?.id) === groupId) ??
-      null;
+      availableGroups.find(
+        (g: any) => Number(g?.groupId ?? g?.id) === groupId
+      ) ?? null;
     return match;
-  }, [groupId, ownedGroups]);
+  }, [groupId, availableGroups]);
 
   useEffect(() => {
-    const ids = ownedGroups
+    const ids = availableGroups
       .map((g: any) => g?.groupId ?? g?.id)
       .map((id: any) =>
         typeof id === 'string' && /^\d+$/.test(id) ? Number(id) : id
@@ -75,7 +107,7 @@ export function CreateSubscriptionPage() {
     if (ids.length === 0) return;
     if (ids.includes(groupId)) return;
     setGroupId(ids[0]);
-  }, [groupId, ownedGroups]);
+  }, [groupId, availableGroups]);
 
   const [title, setTitle] = useState('My Premium Subscription');
   const [amountQortInput, setAmountQortInput] = useState('2');
@@ -195,6 +227,19 @@ export function CreateSubscriptionPage() {
         publishMultipleResources,
       });
 
+      // Cache the pending subscription so it shows up immediately even if blockchain hasn't confirmed
+      cachePendingSubscription({
+        type: 'create',
+        subscriptionId: form.subscriptionId,
+        groupId: form.groupId,
+        ownerName: auth.name,
+        ownerAddress: auth.address ?? undefined,
+        detailsIdentifier,
+        indexIdentifier,
+        details: fullDetails,
+        index: onChainIndex,
+      });
+
       // Mirror example_app: update local publish cache after publishing so UI sees it immediately.
       lists.updateNewResources([
         {
@@ -258,10 +303,19 @@ export function CreateSubscriptionPage() {
       </Stack>
 
       {error ? <Alert severity="warning">{error}</Alert> : null}
-      {!loading && ownedGroups.length === 0 ? (
+      {!loading && !managedLoading && ownedGroups.length === 0 ? (
         <Alert severity="warning">
           No owned private groups found. Create a private group first, then come
           back here.
+        </Alert>
+      ) : null}
+      {!loading &&
+      !managedLoading &&
+      ownedGroups.length > 0 &&
+      availableGroups.length === 0 ? (
+        <Alert severity="info">
+          All your owned private groups already have subscriptions. You can
+          manage them from the "Managed subscriptions" tab on the home page.
         </Alert>
       ) : null}
 
@@ -285,7 +339,9 @@ export function CreateSubscriptionPage() {
 
               <FormControl
                 fullWidth
-                disabled={loading || ownedGroups.length === 0}
+                disabled={
+                  loading || managedLoading || availableGroups.length === 0
+                }
               >
                 <InputLabel id="group-label">Private group</InputLabel>
                 <Select
@@ -294,7 +350,7 @@ export function CreateSubscriptionPage() {
                   value={groupId}
                   onChange={(e) => setGroupId(Number(e.target.value))}
                 >
-                  {ownedGroups
+                  {availableGroups
                     .map((g: any) => {
                       const idRaw = g?.groupId ?? g?.id;
                       const id =

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
+import { getPendingSubscribeActionByGroup } from '../lib/pendingTransactionsCache';
 
 export type SubscriptionStatus =
   | 'not-subscribed'
@@ -44,6 +45,26 @@ export function useCheckSubscriptionStatus(
       setLoading(true);
 
       try {
+        // First, check if there's a pending subscribe action in cache
+        const pendingAction =
+          auth?.address && groupId !== null
+            ? getPendingSubscribeActionByGroup(auth.address, groupId)
+            : null;
+
+        // If user has just completed a subscription (all steps done), treat as subscribed
+        if (
+          pendingAction &&
+          pendingAction.paymentTxSignature &&
+          pendingAction.recordPublished
+        ) {
+          if (!cancelled) {
+            setIsOwner(false);
+            setStatus('subscribed-paid');
+            setLoading(false);
+          }
+          return;
+        }
+
         // First, fetch group info to check if user is the owner
         const groupResponse = await fetch(`/groups/${groupId}`);
         if (groupResponse.ok) {
@@ -114,7 +135,18 @@ export function useCheckSubscriptionStatus(
 
         if (!cancelled) {
           const hasPaymentRecord = resources && resources.length > 0;
-          setStatus(hasPaymentRecord ? 'subscribed-paid' : 'subscribed-unpaid');
+          // If no payment record on blockchain but we have a pending action with payment, treat as paid
+          if (
+            !hasPaymentRecord &&
+            pendingAction &&
+            pendingAction.paymentTxSignature
+          ) {
+            setStatus('subscribed-paid');
+          } else {
+            setStatus(
+              hasPaymentRecord ? 'subscribed-paid' : 'subscribed-unpaid'
+            );
+          }
           setLoading(false);
         }
       } catch (error) {

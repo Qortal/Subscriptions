@@ -5,6 +5,7 @@ import {
   buildSubscriptionIdentifiers,
 } from '../lib/subscriptionPublishing';
 import type { SubscriptionFullDetails } from '../types/subscription';
+import { getPendingSubscription } from '../lib/pendingTransactionsCache';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
@@ -75,6 +76,9 @@ export function useFetchSubscription(
           throw new Error('Owner primary name not found');
         }
 
+        // Check cache first - if found, use it as fallback
+        const cachedSubscription = getPendingSubscription(subscriptionId, ownerName);
+
         const { detailsIdentifier } = await buildSubscriptionIdentifiers(
           identifierOperations,
           subscriptionId
@@ -99,6 +103,40 @@ export function useFetchSubscription(
           limit: 1,
         });
 
+        // If no blockchain data but we have cached data, use it
+        if ((!matches || matches.length === 0) && cachedSubscription) {
+          const cachedDetails = cachedSubscription.details as any;
+          const catalogItem: SubscriptionCatalogItem = {
+            id: subscriptionId,
+            title:
+              typeof cachedDetails?.title === 'string'
+                ? cachedDetails.title
+                : 'Untitled',
+            ownerName,
+            ownerAddress,
+            groupId,
+            description:
+              typeof cachedDetails?.description === 'string'
+                ? cachedDetails.description
+                : '',
+            priceQort:
+              cachedDetails?.amountQort != null
+                ? Number(cachedDetails.amountQort)
+                : 1,
+            billingInterval: intervalDaysToBillingInterval(
+              cachedDetails?.intervalDays ?? 30
+            ),
+            perks: Array.isArray(cachedDetails?.perks) ? cachedDetails.perks : [],
+            detailsIdentifier: cachedSubscription.detailsIdentifier,
+            indexIdentifier: cachedSubscription.indexIdentifier ?? baseIndexIdentifier + '-v1',
+          };
+
+          if (!cancelled) {
+            setSubscription(catalogItem);
+          }
+          return;
+        }
+
         if (!matches || matches.length === 0) {
           throw new Error('Subscription not published yet');
         }
@@ -121,6 +159,40 @@ export function useFetchSubscription(
         const details = detailsRes?.resource?.data as
           | SubscriptionFullDetails
           | undefined;
+
+        // If blockchain details not found but we have cache, use cache
+        if (!details && cachedSubscription) {
+          const cachedDetails = cachedSubscription.details as any;
+          const catalogItem: SubscriptionCatalogItem = {
+            id: subscriptionId,
+            title:
+              typeof cachedDetails?.title === 'string'
+                ? cachedDetails.title
+                : 'Untitled',
+            ownerName,
+            ownerAddress,
+            groupId,
+            description:
+              typeof cachedDetails?.description === 'string'
+                ? cachedDetails.description
+                : '',
+            priceQort:
+              cachedDetails?.amountQort != null
+                ? Number(cachedDetails.amountQort)
+                : 1,
+            billingInterval: intervalDaysToBillingInterval(
+              cachedDetails?.intervalDays ?? 30
+            ),
+            perks: Array.isArray(cachedDetails?.perks) ? cachedDetails.perks : [],
+            detailsIdentifier: cachedSubscription.detailsIdentifier,
+            indexIdentifier,
+          };
+
+          if (!cancelled) {
+            setSubscription(catalogItem);
+          }
+          return;
+        }
 
         if (!details) {
           throw new Error('Subscription details not found');

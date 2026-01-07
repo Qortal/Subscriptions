@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Divider,
@@ -11,6 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { useGlobal } from 'qapp-core';
@@ -23,6 +25,8 @@ import { SubscriptionCardSkeleton } from '../components/SubscriptionCardSkeleton
 import { ManagedSubscriptionCardSkeleton } from '../components/ManagedSubscriptionCardSkeleton';
 import { ManagedSubscriptionCard } from '../components/ManagedSubscriptionCard';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+import { useAllManagedSubscriptionActions } from '../hooks/useAllManagedSubscriptionActions';
+import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscriptionActions';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -42,6 +46,12 @@ export function HomePage() {
     loading: managedLoading,
     error: managedError,
   } = useInitializeManagedSubscriptions(refreshKey);
+
+  const { actions: allActions, loading: actionsLoading } =
+    useAllManagedSubscriptionActions(managedSubs);
+
+  const { actions: currentActions, loading: currentActionsLoading } =
+    useAllCurrentSubscriptionActions(currentSubs);
 
   const handleGoToSubscription = () => {
     const groupId = parseInt(testGroupId, 10);
@@ -80,6 +90,70 @@ export function HomePage() {
           </IconButton>
         </Tooltip>
       </Stack>
+
+      {/* Actions notification banner */}
+      {!actionsLoading && allActions.totalActions > 0 && (
+        <Alert
+          severity="warning"
+          icon={<NotificationsActiveIcon />}
+          action={
+            tab !== 1 ? (
+              <Button color="inherit" size="small" onClick={() => setTab(1)}>
+                View
+              </Button>
+            ) : undefined
+          }
+        >
+          <Typography variant="body2" fontWeight={600}>
+            You have {allActions.totalActions} pending action
+            {allActions.totalActions !== 1 ? 's' : ''} on your managed
+            subscriptions
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+            {allActions.totalPendingJoinRequests > 0 && (
+              <span>
+                {allActions.totalPendingJoinRequests} join request
+                {allActions.totalPendingJoinRequests !== 1 ? 's' : ''} to review
+              </span>
+            )}
+            {allActions.totalPendingJoinRequests > 0 &&
+              allActions.totalNeedingReEncryption > 0 &&
+              ' • '}
+            {allActions.totalNeedingReEncryption > 0 && (
+              <span>
+                {allActions.totalNeedingReEncryption} subscription
+                {allActions.totalNeedingReEncryption !== 1 ? 's' : ''} need key
+                re-encryption
+              </span>
+            )}
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Current subscriptions payment notification banner */}
+      {!currentActionsLoading && currentActions.totalNeedingPayment > 0 && (
+        <Alert
+          severity="error"
+          icon={<NotificationsActiveIcon />}
+          action={
+            tab !== 0 ? (
+              <Button color="inherit" size="small" onClick={() => setTab(0)}>
+                View
+              </Button>
+            ) : undefined
+          }
+        >
+          <Typography variant="body2" fontWeight={600}>
+            {currentActions.totalNeedingPayment} subscription
+            {currentActions.totalNeedingPayment !== 1 ? 's' : ''}{' '}
+            {currentActions.totalNeedingPayment !== 1 ? 'need' : 'needs'}{' '}
+            payment
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+            Your payment is due. Please make a payment to maintain access.
+          </Typography>
+        </Alert>
+      )}
 
       {/* Testing tool - Navigate to subscription by groupId */}
       <Box

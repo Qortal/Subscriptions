@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useAtom } from 'jotai';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalog } from '../hooks/useCatalog';
@@ -31,6 +32,11 @@ import { useGroupInfo } from '../hooks/useGroupInfo';
 import { useFetchSubscription } from '../hooks/useFetchSubscription';
 import { useValidateUserInGroupKeys } from '../hooks/useValidateUserInGroupKeys';
 import { useJoinRequestGroups } from '../hooks/useJoinRequestGroups';
+import {
+  pendingSubscribeActionsAtom,
+  type PendingSubscribeAction,
+} from '../lib/pendingTransactionsCache';
+import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
@@ -138,13 +144,44 @@ export function SubscriptionPage() {
   };
 
   const handlePayment = async (): Promise<string> => {
-    if (!item) throw new Error('Subscription not found');
-    return await sendSubscriptionPayment(item.ownerAddress, item.priceQort);
+    if (!item || !auth?.name || !auth?.address) {
+      throw new Error('Subscription not found or user not authenticated');
+    }
+
+    const signature = await sendSubscriptionPayment(
+      item.ownerAddress,
+      item.priceQort
+    );
+
+    // Cache the pending subscribe action with payment signature
+    const subscriptionId = getSubscriptionIdForGroup(item.groupId);
+    cachePendingSubscribeAction({
+      subscriberName: auth.name,
+      subscriberAddress: auth.address,
+      subscriptionId,
+      detailsIdentifier: item.detailsIdentifier,
+      groupId: item.groupId,
+      ownerAddress: item.ownerAddress,
+      paymentTxSignature: signature,
+      joinRequestSent: false,
+      recordPublished: false,
+    });
+
+    return signature;
   };
 
   const handleJoinGroup = async (): Promise<void> => {
-    if (!item) throw new Error('Subscription not found');
+    if (!item || !auth?.address) {
+      throw new Error('Subscription not found or user not authenticated');
+    }
+
     await sendJoinGroupRequest(item.groupId);
+
+    // Update the pending action to mark join request as sent
+    const subscriptionId = getSubscriptionIdForGroup(item.groupId);
+    updatePendingSubscribeAction(auth.address, subscriptionId, {
+      joinRequestSent: true,
+    });
   };
 
   const handlePublish = async (paymentSignature: string): Promise<void> => {
@@ -159,6 +196,12 @@ export function SubscriptionPage() {
       subscriptionIndexIdentifier: item.indexIdentifier,
       paymentTxSignature: paymentSignature,
       publishMultipleResources,
+    });
+
+    // Update the pending action to mark record as published
+    const subscriptionId = getSubscriptionIdForGroup(item.groupId);
+    updatePendingSubscribeAction(auth.address, subscriptionId, {
+      recordPublished: true,
     });
   };
 
