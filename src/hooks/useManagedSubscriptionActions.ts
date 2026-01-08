@@ -29,18 +29,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
   const { members, loading: membersLoading } = useGroupMembers(groupId, 100);
   const pendingOwnerActions = useAtomValue(pendingOwnerActionsAtom);
   
-  // Get pending re-encrypt action for this group
-  const pendingReEncrypt = useMemo(() => {
-    if (!groupId) return null;
-    return pendingOwnerActions.find(
-      (action) =>
-        action.type === 're-encrypt' &&
-        action.groupId === groupId &&
-        action.expiresAt > Date.now()
-    ) ?? null;
-  }, [groupId, pendingOwnerActions]);
-  
-  const shouldReEncrypt = useValidateGroupKeys(groupId ?? 0, pendingReEncrypt);
+  const shouldReEncrypt = useValidateGroupKeys(groupId ?? 0);
   
   const [detailsIdentifier, setDetailsIdentifier] = useState<string | null>(null);
   const [priceQort, setPriceQort] = useState<number>(1);

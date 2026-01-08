@@ -30,7 +30,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
-import { useGlobal, usePublish } from 'qapp-core';
+import { objectToBase64, useGlobal, usePublish } from 'qapp-core';
 import {
   buildSubscriptionIdentifiers,
   buildUpdatedDetails,
@@ -154,23 +154,7 @@ export function ManageSubscriptionPage() {
 
   const getDisplayName = useGetDisplayName();
 
-  // Validate group keys - pass pending re-encrypt from atom
-  const pendingReEncrypt = useMemo(() => {
-    if (!groupId) return null;
-    return (
-      pendingOwnerActions.find(
-        (action) =>
-          action.type === 're-encrypt' &&
-          action.groupId === groupId &&
-          action.expiresAt > Date.now()
-      ) ?? null
-    );
-  }, [groupId, pendingOwnerActions]);
-
-  const shouldReEncryptGroupKeys = useValidateGroupKeys(
-    groupId!,
-    pendingReEncrypt
-  );
+  const shouldReEncryptGroupKeys = useValidateGroupKeys(groupId!);
 
   const [details, setDetails] = useState<SubscriptionFullDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -184,10 +168,14 @@ export function ManageSubscriptionPage() {
   const [intervalDays] = useState<number>(30); // Fixed to monthly for MVP
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState('');
+  const [perks, setPerks] = useState<string[]>([]);
+  const [newPerk, setNewPerk] = useState('');
+  const [status, setStatus] = useState<'active' | 'disabled'>('active');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isReencrypting, setIsReencrypting] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   // Get the details identifier for payment validation
   const [detailsIdentifier, setDetailsIdentifier] = useState<string | null>(
@@ -292,6 +280,14 @@ export function ManageSubscriptionPage() {
     if (typeof anyDetails.graceDays === 'number') {
       setGraceDays(anyDetails.graceDays);
     }
+    if (Array.isArray(anyDetails.perks)) {
+      setPerks(anyDetails.perks);
+    }
+    if (anyDetails.status === 'disabled') {
+      setStatus('disabled');
+    } else {
+      setStatus('active');
+    }
 
     didInitFormRef.current = true;
   }, [details]);
@@ -363,6 +359,7 @@ export function ManageSubscriptionPage() {
         existingDetails: details,
         title,
         description,
+        perks,
         amountQort: priceQort,
         intervalDays,
         graceDays,
@@ -574,6 +571,76 @@ export function ManageSubscriptionPage() {
     setRefreshKey((prev) => prev + 1);
   };
 
+  async function handleToggleStatus() {
+    if (!details || !subscriptionId || !auth?.name || !identifierOperations) {
+      setSnackbarMsg('Missing required data to toggle status');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const newStatus = status === 'active' ? 'disabled' : 'active';
+
+    try {
+      setIsTogglingStatus(true);
+
+      // Build identifiers
+      const { detailsIdentifier } = await buildSubscriptionIdentifiers(
+        identifierOperations,
+        subscriptionId
+      );
+
+      // Create updated details
+      const updatedDetails: any = {
+        ...details,
+        status: newStatus,
+        disabledAt: newStatus === 'disabled' ? Date.now() : undefined,
+      };
+
+      // Publish updated details
+      await publishMultipleResources([
+        {
+          service: 'DOCUMENT',
+          name: auth.name,
+          identifier: detailsIdentifier,
+          data64: await objectToBase64(updatedDetails),
+        },
+      ]);
+
+      setStatus(newStatus);
+      setDetails(updatedDetails);
+      setSnackbarMsg(
+        `Subscription ${newStatus === 'disabled' ? 'disabled' : 're-enabled'}!`
+      );
+      setSnackbarOpen(true);
+
+      // Refresh after a short delay
+      setTimeout(() => {
+        setRefreshKey((prev) => prev + 1);
+      }, 1000);
+    } catch (e: any) {
+      setSnackbarMsg(e?.message ?? 'Failed to update status');
+      setSnackbarOpen(true);
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  }
+
+  const handleAddPerk = () => {
+    if (!newPerk.trim()) return;
+    setPerks([...perks, newPerk.trim()]);
+    setNewPerk('');
+  };
+
+  const handleRemovePerk = (index: number) => {
+    setPerks(perks.filter((_, i) => i !== index));
+  };
+
+  const handleEditPerk = (index: number, value: string) => {
+    const updated = [...perks];
+    updated[index] = value;
+    setPerks(updated);
+  };
+
   if (managedLoading || detailsLoading) {
     return (
       <Stack spacing={2.5}>
@@ -706,6 +773,18 @@ export function ManageSubscriptionPage() {
         </Alert>
       )}
 
+      {status === 'disabled' && (
+        <Alert severity="warning">
+          <Typography variant="body2" fontWeight={600}>
+            This subscription is disabled
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            New users cannot subscribe, but existing members retain access.
+            Re-enable to accept new subscribers.
+          </Typography>
+        </Alert>
+      )}
+
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2}>
         <Box flex={1}>
           <Card variant="outlined">
@@ -749,6 +828,92 @@ export function ManageSubscriptionPage() {
                   multiline
                   minRows={4}
                 />
+
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                    What subscribers get (Perks)
+                  </Typography>
+                  <Stack spacing={1}>
+                    {perks.map((perk, index) => (
+                      <Stack
+                        key={index}
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                      >
+                        <TextField
+                          value={perk}
+                          onChange={(e) =>
+                            handleEditPerk(index, e.target.value)
+                          }
+                          fullWidth
+                          size="small"
+                          placeholder="Perk description"
+                        />
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleRemovePerk(index)}
+                        >
+                          ×
+                        </IconButton>
+                      </Stack>
+                    ))}
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        value={newPerk}
+                        onChange={(e) => setNewPerk(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddPerk();
+                          }
+                        }}
+                        placeholder="Add a new perk..."
+                        size="small"
+                        fullWidth
+                      />
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleAddPerk}
+                        disabled={!newPerk.trim()}
+                      >
+                        Add
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                    Subscription Status
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={status === 'active'}
+                        onChange={handleToggleStatus}
+                        disabled={isTogglingStatus}
+                        color="success"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          {status === 'active' ? 'Active' : 'Disabled'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                          {status === 'active'
+                            ? 'Accepting new subscribers'
+                            : 'Not accepting new subscribers'}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
 
                 <Divider />
 

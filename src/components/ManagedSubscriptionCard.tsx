@@ -190,6 +190,14 @@ export function ManagedSubscriptionCard(props: {
               <Typography variant="h6" fontWeight={800}>
                 {title}
               </Typography>
+              {(details as any)?.status === 'disabled' && (
+                <Chip 
+                  label="Disabled" 
+                  size="small" 
+                  color="warning"
+                  variant="filled"
+                />
+              )}
               {actions.totalActions > 0 && (
                 <Tooltip 
                   title={

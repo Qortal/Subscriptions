@@ -86,6 +86,10 @@ export type SubscriptionFullDetailsV2 = {
   graceDays: number;
   // States for pricing tiers or multiple subscription options
   states?: SubscriptionState[];
+  // Status management
+  status?: 'active' | 'disabled'; // Default to 'active' if not present
+  disabledAt?: number; // Timestamp when disabled
+  disabledReason?: string; // Optional reason
 };
 
 export type SubscriptionFullDetails =

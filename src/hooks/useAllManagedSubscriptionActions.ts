@@ -128,69 +128,57 @@ export function useAllManagedSubscriptionActions(managedSubscriptions: AnyGroup[
                 validJoinRequestCount = validations.filter(Boolean).length;
               }
 
-              // Check if group needs re-encryption
+              // Check if group needs re-encryption (purely based on blockchain state)
               let needsReEncryption = false;
               
-              // First check if there's a valid pending re-encrypt action
-              const pendingReEncrypt = pendingOwnerActions.find(
-                (action) =>
-                  action.type === 're-encrypt' &&
-                  action.groupId === groupId &&
-                  action.expiresAt > Date.now()
-              );
+              try {
+                const memberData = await getGroupMembers(groupId);
+                const { names } = await getGroupAdmins(groupId);
 
-              if (!pendingReEncrypt) {
-                // No pending re-encrypt, so check if group actually needs it
-                try {
-                  const memberData = await getGroupMembers(groupId);
-                  const { names } = await getGroupAdmins(groupId);
+                if (names.length > 0) {
+                  const getPublishesFromAdmins = async (admins: string[], gId: number) => {
+                    const queryString = admins.map((name) => `name=${name}`).join('&');
+                    const url = `/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${gId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+                    const response = await fetch(url);
+                    if (!response.ok) return false;
+                    const adminData = await response.json();
+                    const filterId = adminData.filter(
+                      (data: any) => data.identifier === `symmetric-qchat-group-${gId}`
+                    );
+                    if (filterId?.length === 0) return false;
+                    const sortedData = filterId.sort((a: any, b: any) => {
+                      const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
+                      const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
+                      return dateB.getTime() - dateA.getTime();
+                    });
+                    return sortedData[0];
+                  };
 
-                  if (names.length > 0) {
-                    const getPublishesFromAdmins = async (admins: string[], gId: number) => {
-                      const queryString = admins.map((name) => `name=${name}`).join('&');
-                      const url = `/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${gId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
-                      const response = await fetch(url);
-                      if (!response.ok) return false;
-                      const adminData = await response.json();
-                      const filterId = adminData.filter(
-                        (data: any) => data.identifier === `symmetric-qchat-group-${gId}`
-                      );
-                      if (filterId?.length === 0) return false;
-                      const sortedData = filterId.sort((a: any, b: any) => {
-                        const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
-                        const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
-                        return dateB.getTime() - dateA.getTime();
-                      });
-                      return sortedData[0];
-                    };
+                  const publish = await getPublishesFromAdmins(names, groupId);
+                  
+                  if (publish === false) {
+                    // No encryption keys found, needs re-encryption
+                    needsReEncryption = true;
+                  } else {
+                    // Check if member count matches
+                    const res = await fetch(
+                      `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64`
+                    );
+                    const data = await res.text();
+                    const allCombined = base64ToUint8Array(data);
+                    const countStartPosition = allCombined.length - 4;
+                    const countArray = allCombined.slice(countStartPosition, countStartPosition + 4);
+                    const count = new Uint32Array(countArray.buffer)[0];
 
-                    const publish = await getPublishesFromAdmins(names, groupId);
-                    
-                    if (publish === false) {
-                      // No encryption keys found, needs re-encryption
+                    if (count !== memberData?.memberCount) {
                       needsReEncryption = true;
-                    } else {
-                      // Check if member count matches
-                      const res = await fetch(
-                        `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64`
-                      );
-                      const data = await res.text();
-                      const allCombined = base64ToUint8Array(data);
-                      const countStartPosition = allCombined.length - 4;
-                      const countArray = allCombined.slice(countStartPosition, countStartPosition + 4);
-                      const count = new Uint32Array(countArray.buffer)[0];
-
-                      if (count !== memberData?.memberCount) {
-                        needsReEncryption = true;
-                      }
                     }
                   }
-                } catch (error) {
-                  // Silently fail - don't count as needing re-encryption if we can't check
-                  console.error('Error checking re-encryption status:', error);
                 }
+              } catch (error) {
+                // Silently fail - don't count as needing re-encryption if we can't check
+                console.error('Error checking re-encryption status:', error);
               }
-              // If pendingReEncrypt exists and is valid, needsReEncryption stays false
 
               return {
                 groupId,

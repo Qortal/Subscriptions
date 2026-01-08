@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAtom } from 'jotai';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalog } from '../hooks/useCatalog';
 import { useGlobal, usePublish } from 'qapp-core';
@@ -37,6 +37,7 @@ import {
   type PendingSubscribeAction,
 } from '../lib/pendingTransactionsCache';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+import { checkSubscriptionStatus } from '../lib/checkSubscriptionStatus';
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
@@ -111,6 +112,9 @@ export function SubscriptionPage() {
   const userIsSubscribed = isSubscribed || justSubscribed;
   const userNeedsPayment = needsPayment && !justSubscribed;
 
+  // Check if subscription is disabled
+  const isDisabled = item && (item as any).status === 'disabled';
+
   // Check if user is in group encryption keys (only if subscribed and paid)
   const shouldCheckGroupKeys = userIsSubscribed && !userNeedsPayment;
   const { isInGroupKeys, isLoading: checkingGroupKeys } =
@@ -119,6 +123,14 @@ export function SubscriptionPage() {
   const handleOpenSubscribeModal = () => {
     if (!auth?.name || !auth?.address) {
       setSnackbarMsg('You must be logged in to subscribe');
+      setSnackbarOpen(true);
+      return;
+    }
+    // Check if subscription is disabled
+    if (isDisabled) {
+      setSnackbarMsg(
+        'This subscription is currently not accepting new members'
+      );
       setSnackbarOpen(true);
       return;
     }
@@ -351,7 +363,13 @@ export function SubscriptionPage() {
                   </Typography>
                 </Typography>
 
-                {hasPendingJoinRequest ? (
+                {isDisabled ? (
+                  <Alert severity="info">
+                    <Typography variant="body2" fontWeight={600}>
+                      This subscription is currently not accepting new members
+                    </Typography>
+                  </Alert>
+                ) : hasPendingJoinRequest ? (
                   <Button
                     size="large"
                     variant="outlined"

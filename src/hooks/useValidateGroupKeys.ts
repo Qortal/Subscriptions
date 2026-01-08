@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { PendingOwnerAction } from '../lib/pendingTransactionsCache';
 
 export function base64ToUint8Array(base64: string) {
   const binaryString = atob(base64);
@@ -86,10 +85,7 @@ export const getGroupMembers = async (groupNumber: number) => {
   return groupData;
 };
 
-export const useValidateGroupKeys = (
-  groupId: number,
-  pendingReEncrypt?: PendingOwnerAction | null
-) => {
+export const useValidateGroupKeys = (groupId: number) => {
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState<
     number | null
@@ -163,56 +159,7 @@ export const useValidateGroupKeys = (
   const shouldReEncrypt = useMemo(() => {
     if (isLoading) return false;
 
-    // Check if there's a pending re-encrypt action passed from atom
-    if (pendingReEncrypt) {
-      console.log('🔍 Found pending re-encrypt from atom:', {
-        cachedMemberCount: pendingReEncrypt.memberCount,
-        currentMemberCount: members?.memberCount,
-        cachedTimestamp: pendingReEncrypt.reEncryptTimestamp,
-        members: members,
-      });
-
-      // Validate the cached re-encryption is still valid
-
-      // Check 1: If cached member count matches current, encryption is still valid
-      if (
-        pendingReEncrypt.memberCount !== undefined &&
-        members?.memberCount !== undefined &&
-        pendingReEncrypt.memberCount === members.memberCount
-      ) {
-        console.log('✅ Member count matches, no re-encrypt needed');
-        return false; // Member count hasn't changed, no need to re-encrypt
-      }
-
-      // Check 2: If re-encrypt timestamp is newer than latest join, encryption is valid
-      if (
-        pendingReEncrypt.reEncryptTimestamp &&
-        members?.members &&
-        members.members.length > 0
-      ) {
-        const latestJoined = members.members.reduce(
-          (maxJoined: number, current: any) => {
-            return current.joined > maxJoined ? current.joined : maxJoined;
-          },
-          members.members[0].joined
-        );
-
-        console.log('🕐 Comparing timestamps:', {
-          reEncryptTimestamp: pendingReEncrypt.reEncryptTimestamp,
-          latestJoined,
-          isValid: pendingReEncrypt.reEncryptTimestamp > latestJoined,
-        });
-
-        if (pendingReEncrypt.reEncryptTimestamp > latestJoined) {
-          console.log('✅ Re-encryption is newer than all joins');
-          return false; // Re-encryption is newer than all members, still valid
-        }
-      }
-
-      console.log('⚠️ Cache found but validation failed, falling through');
-      // If we have a pending re-encrypt but it's outdated, fall through to normal validation
-    }
-
+    // Re-encryption check based purely on blockchain state (no cache involved)
     if (triedToFetchSecretKey && !secretKeyPublishDate) return true;
     if (
       !secretKeyPublishDate ||
@@ -240,7 +187,6 @@ export const useValidateGroupKeys = (
     newEncryptionNotification,
     triedToFetchSecretKey,
     isLoading,
-    pendingReEncrypt,
   ]);
 
   return shouldReEncrypt;
