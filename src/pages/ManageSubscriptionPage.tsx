@@ -6,12 +6,8 @@ import {
   CardContent,
   Chip,
   Divider,
-  FormControl,
   FormControlLabel,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
   Snackbar,
   Skeleton,
   Stack,
@@ -26,7 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
@@ -197,7 +193,6 @@ export function ManageSubscriptionPage() {
     details && (details as any).states ? (details as any).states : undefined;
 
   const {
-    paymentInfo,
     loading: paymentsLoading,
     isPaid,
     isInGracePeriod,
@@ -213,11 +208,8 @@ export function ManageSubscriptionPage() {
   );
 
   // Validate join requests (check if they've paid and published)
-  const {
-    validations,
-    loading: validatingJoinRequests,
-    getValidation,
-  } = useValidateJoinRequests(joinRequesterAddresses, detailsIdentifier);
+  const { loading: validatingJoinRequests, getValidation } =
+    useValidateJoinRequests(joinRequesterAddresses, detailsIdentifier);
 
   const [invitingUser, setInvitingUser] = useState<string | null>(null);
   const [kickingUser, setKickingUser] = useState<string | null>(null);

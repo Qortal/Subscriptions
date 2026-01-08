@@ -61,7 +61,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
 
               if (!detailsRes || detailsRes.length === 0) return null;
 
-              const details = detailsRes[0];
+              const details = detailsRes[0] as any;
               const states = details?.states || [];
               if (states.length === 0) return null;
 
@@ -69,13 +69,12 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
               const currentState = states[states.length - 1];
               const priceQort = currentState.price || 0;
               const intervalDays = currentState.interval === 'MONTHLY' ? 30 : 30;
-              const graceDays = details.graceDays || 0;
 
               // Check for payment records (PRODUCT)
               const paymentRecords = await lists!.fetchResourcesResultsOnly({
                 identifier: detailsIdentifier,
                 service: 'PRODUCT',
-                name: auth!.name,
+                name: auth!.name || undefined,
                 exactMatchNames: true,
                 limit: 50, // Get recent payments
               });

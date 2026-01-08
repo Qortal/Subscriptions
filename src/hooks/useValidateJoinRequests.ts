@@ -57,7 +57,7 @@ export function useValidateJoinRequests(
 
               // Check for PRODUCT record (contains payment signature)
               const resources = await lists.fetchResourcesResultsOnly({
-                identifier: detailsIdentifier,
+                identifier: detailsIdentifier || '',
                 service: 'PRODUCT',
                 name: primaryName,
                 exactMatchNames: true,

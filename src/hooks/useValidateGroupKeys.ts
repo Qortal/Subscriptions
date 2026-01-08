@@ -56,11 +56,11 @@ export const getGroupAdmins = async (groupNumber: number) => {
     `/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  const members: any = [];
-  const membersAddresses = [];
-  const both = [];
+  const members: string[] = [];
+  const membersAddresses: string[] = [];
+  const both: Array<{ name: string; address: string }> = [];
 
-  const getMemNames = groupData?.members?.map(async (member) => {
+  const getMemNames = groupData?.members?.map(async (member: any) => {
     if (member?.member) {
       const name = await getNameInfo(member.member);
       if (name) {
@@ -92,7 +92,7 @@ export const useValidateGroupKeys = (groupId: number) => {
   >(null);
   const [memberCountFromSecretKeyData, setMemberCountFromSecretKeyData] =
     useState<number | null>(null);
-  const [newEncryptionNotification, setNewEncryptionNotification] = useState<
+  const [newEncryptionNotification] = useState<
     any | null
   >(null);
   const [members, setMembers] = useState<any>(null);
@@ -100,8 +100,6 @@ export const useValidateGroupKeys = (groupId: number) => {
 
   useEffect(() => {
     if (!groupId) return;
-
-    let cancelled = false;
     async function fetchData() {
       setIsLoading(true);
       try {
@@ -149,9 +147,6 @@ export const useValidateGroupKeys = (groupId: number) => {
     }
 
     fetchData();
-    return () => {
-      cancelled = true;
-    };
 
     // TODO: Implement group keys validation logic
   }, [groupId]);
@@ -172,7 +167,7 @@ export const useValidateGroupKeys = (groupId: number) => {
 
     if (isDiffMemberNumber) return true;
 
-    const latestJoined = members?.members.reduce((maxJoined, current) => {
+    const latestJoined = members?.members.reduce((maxJoined: number, current: any) => {
       return current.joined > maxJoined ? current.joined : maxJoined;
     }, members?.members[0].joined);
 

@@ -16,8 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useAtom } from 'jotai';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalog } from '../hooks/useCatalog';
 import { useGlobal, usePublish } from 'qapp-core';
@@ -33,11 +32,10 @@ import { useFetchSubscription } from '../hooks/useFetchSubscription';
 import { useValidateUserInGroupKeys } from '../hooks/useValidateUserInGroupKeys';
 import { useJoinRequestGroups } from '../hooks/useJoinRequestGroups';
 import {
-  pendingSubscribeActionsAtom,
-  type PendingSubscribeAction,
+  cachePendingSubscribeAction,
+  updatePendingSubscribeAction,
 } from '../lib/pendingTransactionsCache';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
-import { checkSubscriptionStatus } from '../lib/checkSubscriptionStatus';
 
 export function SubscriptionPage() {
   const navigate = useNavigate();

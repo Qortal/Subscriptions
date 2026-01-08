@@ -58,8 +58,8 @@ export function ManagedSubscriptionCard(props: {
     () => (groupId !== null ? getSubscriptionIdForGroup(groupId) : null),
     [groupId]
   );
-  
-  const { actions, loading: actionsLoading } = useManagedSubscriptionActions(groupId);
+
+  const { actions } = useManagedSubscriptionActions(groupId);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,19 +191,22 @@ export function ManagedSubscriptionCard(props: {
                 {title}
               </Typography>
               {(details as any)?.status === 'disabled' && (
-                <Chip 
-                  label="Disabled" 
-                  size="small" 
+                <Chip
+                  label="Disabled"
+                  size="small"
                   color="warning"
                   variant="filled"
                 />
               )}
               {actions.totalActions > 0 && (
-                <Tooltip 
+                <Tooltip
                   title={
                     <Box>
                       {actions.pendingJoinRequests > 0 && (
-                        <div>{actions.pendingJoinRequests} pending join request{actions.pendingJoinRequests !== 1 ? 's' : ''}</div>
+                        <div>
+                          {actions.pendingJoinRequests} pending join request
+                          {actions.pendingJoinRequests !== 1 ? 's' : ''}
+                        </div>
                       )}
                       {actions.needsReEncryption && (
                         <div>Keys need re-encryption</div>
@@ -211,8 +214,8 @@ export function ManagedSubscriptionCard(props: {
                     </Box>
                   }
                 >
-                  <Badge 
-                    badgeContent={actions.totalActions} 
+                  <Badge
+                    badgeContent={actions.totalActions}
                     color="error"
                     sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem' } }}
                   >
@@ -264,7 +267,9 @@ export function ManagedSubscriptionCard(props: {
           disabled={groupId === null}
           color={actions.totalActions > 0 ? 'error' : 'primary'}
         >
-          Manage{actions.totalActions > 0 && ` (${actions.totalActions} action${actions.totalActions !== 1 ? 's' : ''})`}
+          Manage
+          {actions.totalActions > 0 &&
+            ` (${actions.totalActions} action${actions.totalActions !== 1 ? 's' : ''})`}
         </Button>
       </CardActions>
     </Card>
