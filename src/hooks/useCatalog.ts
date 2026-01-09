@@ -10,7 +10,8 @@ import { useOwnedGroups } from './useOwnedGroups';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'monthly' | 'yearly' {
+): 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
 }

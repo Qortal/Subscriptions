@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useGlobal, usePublish } from 'qapp-core';
 import type { SubscriptionCatalogItem } from '../types/subscription';
-import {
-  buildSubscriptionIdentifiers,
-} from '../lib/subscriptionPublishing';
+import { buildSubscriptionIdentifiers } from '../lib/subscriptionPublishing';
 import type { SubscriptionFullDetails } from '../types/subscription';
 import { getPendingSubscription } from '../lib/pendingTransactionsCache';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'monthly' | 'yearly' {
+): 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
 }
@@ -33,7 +32,8 @@ export function useFetchSubscription(
   const { identifierOperations, lists } = useGlobal();
   const { fetchPublish } = usePublish(3, 'JSON');
 
-  const [subscription, setSubscription] = useState<SubscriptionCatalogItem | null>(null);
+  const [subscription, setSubscription] =
+    useState<SubscriptionCatalogItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +77,10 @@ export function useFetchSubscription(
         }
 
         // Check cache first - if found, use it as fallback
-        const cachedSubscription = getPendingSubscription(subscriptionId, ownerName);
+        const cachedSubscription = getPendingSubscription(
+          subscriptionId,
+          ownerName
+        );
 
         const { detailsIdentifier } = await buildSubscriptionIdentifiers(
           identifierOperations,
@@ -126,9 +129,12 @@ export function useFetchSubscription(
             billingInterval: intervalDaysToBillingInterval(
               cachedDetails?.intervalDays ?? 30
             ),
-            perks: Array.isArray(cachedDetails?.perks) ? cachedDetails.perks : [],
+            perks: Array.isArray(cachedDetails?.perks)
+              ? cachedDetails.perks
+              : [],
             detailsIdentifier: cachedSubscription.detailsIdentifier,
-            indexIdentifier: cachedSubscription.indexIdentifier ?? baseIndexIdentifier + '-v1',
+            indexIdentifier:
+              cachedSubscription.indexIdentifier ?? baseIndexIdentifier + '-v1',
           };
 
           if (!cancelled) {
@@ -183,7 +189,9 @@ export function useFetchSubscription(
             billingInterval: intervalDaysToBillingInterval(
               cachedDetails?.intervalDays ?? 30
             ),
-            perks: Array.isArray(cachedDetails?.perks) ? cachedDetails.perks : [],
+            perks: Array.isArray(cachedDetails?.perks)
+              ? cachedDetails.perks
+              : [],
             detailsIdentifier: cachedSubscription.detailsIdentifier,
             indexIdentifier,
           };
@@ -214,9 +222,7 @@ export function useFetchSubscription(
               ? anyDetails.description
               : '',
           priceQort:
-            anyDetails?.amountQort != null
-              ? Number(anyDetails.amountQort)
-              : 1,
+            anyDetails?.amountQort != null ? Number(anyDetails.amountQort) : 1,
           billingInterval: intervalDaysToBillingInterval(
             anyDetails?.intervalDays ?? 30
           ),
@@ -249,4 +255,3 @@ export function useFetchSubscription(
 
   return { subscription, loading, error };
 }
-

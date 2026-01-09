@@ -7,7 +7,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -24,7 +23,6 @@ import { CurrentSubscriptionCard } from '../components/CurrentSubscriptionCard';
 import { SubscriptionCardSkeleton } from '../components/SubscriptionCardSkeleton';
 import { ManagedSubscriptionCardSkeleton } from '../components/ManagedSubscriptionCardSkeleton';
 import { ManagedSubscriptionCard } from '../components/ManagedSubscriptionCard';
-import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
 import { useAllManagedSubscriptionActions } from '../hooks/useAllManagedSubscriptionActions';
 import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscriptionActions';
 
@@ -33,7 +31,6 @@ export function HomePage() {
   const { auth } = useGlobal();
 
   const [tab, setTab] = useAtom(homeTabAtom);
-  const [testGroupId, setTestGroupId] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const {
@@ -52,14 +49,6 @@ export function HomePage() {
 
   const { actions: currentActions, loading: currentActionsLoading } =
     useAllCurrentSubscriptionActions(currentSubs);
-
-  const handleGoToSubscription = () => {
-    const groupId = parseInt(testGroupId, 10);
-    if (!isNaN(groupId)) {
-      const subscriptionId = getSubscriptionIdForGroup(groupId);
-      navigate(`/subscription/${subscriptionId}`);
-    }
-  };
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);
@@ -156,7 +145,7 @@ export function HomePage() {
       )}
 
       {/* Testing tool - Navigate to subscription by groupId */}
-      <Box
+      {/* <Box
         sx={{
           p: 2,
           backgroundColor: 'rgba(255, 165, 0, 0.1)',
@@ -186,7 +175,7 @@ export function HomePage() {
             Go to Subscription
           </Button>
         </Stack>
-      </Box>
+      </Box> */}
 
       <Box>
         <Tabs

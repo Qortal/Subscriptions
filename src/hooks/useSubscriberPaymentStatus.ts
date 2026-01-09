@@ -54,6 +54,48 @@ function getPriceAtTime(
 }
 
 /**
+ * Get the interval (in days) that was active at a given timestamp
+ */
+function getIntervalDaysAtTime(
+  states: SubscriptionState[] | undefined,
+  timestamp: number,
+  currentIntervalDays: number
+): number {
+  if (!states || states.length === 0) {
+    return currentIntervalDays;
+  }
+
+  // Sort states by effectiveFrom (oldest to newest)
+  const sortedStates = [...states].sort(
+    (a, b) => a.effectiveFrom - b.effectiveFrom
+  );
+
+  // Find the state that was active at the payment time
+  // Start from the end and work backwards to find the first state that was effective before the timestamp
+  for (let i = sortedStates.length - 1; i >= 0; i--) {
+    if (sortedStates[i].effectiveFrom <= timestamp) {
+      const interval = sortedStates[i].interval;
+      // Convert interval enum to days
+      switch (interval) {
+        case 'DAY':
+          return 1;
+        case 'WEEK':
+          return 7;
+        case 'MONTH':
+          return 30;
+        case 'YEAR':
+          return 365;
+        default:
+          return currentIntervalDays;
+      }
+    }
+  }
+
+  // If no state found (payment before any state), use current interval
+  return currentIntervalDays;
+}
+
+/**
  * Hook to check payment status for subscribers
  * Fetches PRODUCT service records for each subscriber to validate payments
  * Validates: transaction exists, amount matches historical price, recipient is correct, subscription not expired
@@ -238,9 +280,16 @@ export function useSubscriberPaymentStatus(
             let expiresAt: number | undefined;
 
             if (paymentValid && paymentTimestamp) {
-              // Calculate when the subscription expires (payment date + interval + grace period)
+              // Get the interval that was active when they paid
+              const intervalDaysAtPayment = getIntervalDaysAtTime(
+                subscriptionStates,
+                paymentTimestamp,
+                intervalDays
+              );
+
+              // Calculate when the subscription expires (payment date + historical interval + grace period)
               const subscriptionEndsAt =
-                paymentTimestamp + intervalDays * 24 * 60 * 60 * 1000;
+                paymentTimestamp + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
               const graceEndsAt =
                 subscriptionEndsAt + graceDays * 24 * 60 * 60 * 1000;
               expiresAt = graceEndsAt;

@@ -38,7 +38,8 @@ function getGroupName(group: AnyGroup): string {
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'monthly' | 'yearly' {
+): 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
 }
@@ -129,10 +130,12 @@ export function ManagedSubscriptionCard(props: {
   const memberCount = Math.max(0, rawMemberCount - 1); // Exclude the owner
 
   const gross = memberCount * (Number.isFinite(priceQort) ? priceQort : 0);
-  const monthlyRevenueQort =
+  const revenueQort =
     billingInterval === 'yearly'
       ? Math.round((gross / 12) * 100) / 100
-      : Math.round(gross * 100) / 100;
+      : billingInterval === 'daily'
+        ? Math.round(gross * 30 * 100) / 100 // Convert to monthly estimate
+        : Math.round(gross * 100) / 100;
 
   // Get unpaid count from actions hook
   const unpaidCount = actions.unpaidMembersCount;
@@ -253,7 +256,7 @@ export function ManagedSubscriptionCard(props: {
               color={unpaidCount > 0 ? 'warning' : 'success'}
             />
             <Chip
-              label={`${monthlyRevenueQort} QORT/mo est.`}
+              label={`${revenueQort} QORT/mo est.`}
               size="small"
               variant="outlined"
             />

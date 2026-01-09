@@ -64,9 +64,15 @@ export function useManagedSubscriptionActions(groupId: number | null) {
           if (details.states && details.states.length > 0) {
             const currentState = details.states[details.states.length - 1];
             setPriceQort(currentState.price || 1);
-            setIntervalDays(currentState.interval === 'MONTHLY' ? 30 : 30);
+            const intervalDays = currentState.interval === 'DAY' ? 1 : 
+                                 currentState.interval === 'WEEK' ? 7 : 
+                                 currentState.interval === 'YEAR' ? 365 : 30;
+            setIntervalDays(intervalDays);
           } else if (details.amountQort) {
             setPriceQort(Number(details.amountQort));
+          }
+          if (typeof details.intervalDays === 'number') {
+            setIntervalDays(details.intervalDays);
           }
           if (typeof details.graceDays === 'number') {
             setGraceDays(details.graceDays);

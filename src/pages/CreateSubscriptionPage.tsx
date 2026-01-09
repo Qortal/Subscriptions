@@ -111,7 +111,7 @@ export function CreateSubscriptionPage() {
 
   const [title, setTitle] = useState('My Premium Subscription');
   const [amountQortInput, setAmountQortInput] = useState('2');
-  const [intervalDays] = useState<number>(30); // Fixed to monthly for MVP
+  const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState(
     'Describe your subscription: what it is, who it is for, and how subscribers benefit.'
@@ -382,7 +382,7 @@ export function CreateSubscriptionPage() {
             <Stack spacing={2}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Monthly Price (QORT)"
+                  label="Price (QORT)"
                   type="number"
                   value={amountQortInput}
                   onChange={(e) => {
@@ -399,6 +399,21 @@ export function CreateSubscriptionPage() {
                   inputProps={{ min: 1, step: 0.01 }}
                   fullWidth
                 />
+                <FormControl fullWidth>
+                  <InputLabel id="interval-label">Billing Interval</InputLabel>
+                  <Select
+                    labelId="interval-label"
+                    label="Billing Interval"
+                    value={intervalDays}
+                    onChange={(e) => setIntervalDays(Number(e.target.value))}
+                  >
+                    <MenuItem value={1}>Daily (1 day)</MenuItem>
+                    <MenuItem value={30}>Monthly (30 days)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <FormControl fullWidth>
                   <InputLabel id="grace-label">Grace Period (days)</InputLabel>
                   <Select
@@ -417,8 +432,8 @@ export function CreateSubscriptionPage() {
               </Stack>
 
               <Alert severity="info">
-                Monthly subscription with a {graceDays}-day grace period after
-                payment is due.
+                Subscription with {intervalDays === 1 ? 'daily' : 'monthly'}{' '}
+                billing and a {graceDays}-day grace period after payment is due.
               </Alert>
             </Stack>
           ) : null}

@@ -1,4 +1,4 @@
-export type BillingInterval = 'monthly' | 'yearly';
+export type BillingInterval = 'daily' | 'monthly' | 'yearly';
 
 // UI wording: "Private groups" (we treat any non-open/closed group as private for this app)
 export type GroupAccessType = 'private';

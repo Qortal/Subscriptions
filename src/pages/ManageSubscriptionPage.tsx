@@ -6,8 +6,12 @@ import {
   CardContent,
   Chip,
   Divider,
+  FormControl,
   FormControlLabel,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Snackbar,
   Skeleton,
   Stack,
@@ -161,7 +165,7 @@ export function ManageSubscriptionPage() {
 
   const [title, setTitle] = useState('');
   const [priceQort, setPriceQort] = useState<number>(1);
-  const [intervalDays] = useState<number>(30); // Fixed to monthly for MVP
+  const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState('');
   const [perks, setPerks] = useState<string[]>([]);
@@ -268,6 +272,9 @@ export function ManageSubscriptionPage() {
     if (anyDetails.amountQort != null) {
       const n = Number(anyDetails.amountQort);
       if (Number.isFinite(n)) setPriceQort(n);
+    }
+    if (typeof anyDetails.intervalDays === 'number') {
+      setIntervalDays(anyDetails.intervalDays);
     }
     if (typeof anyDetails.graceDays === 'number') {
       setGraceDays(anyDetails.graceDays);
@@ -693,8 +700,10 @@ export function ManageSubscriptionPage() {
   const graceCount = graceMembersCount;
   const unpaidCount = unpaidMembersCount;
 
-  const monthlyRevenueQort =
+  const revenueQort =
     Math.round((paidCount + graceCount) * priceQort * 100) / 100;
+
+  const revenueLabel = intervalDays === 1 ? 'QORT/day' : 'QORT/mo';
 
   return (
     <Stack spacing={2.5}>
@@ -736,7 +745,7 @@ export function ManageSubscriptionPage() {
             variant="outlined"
             color={unpaidCount > 0 ? 'error' : 'default'}
           />
-          <Chip label={`${monthlyRevenueQort} QORT/mo`} variant="outlined" />
+          <Chip label={`${revenueQort} ${revenueLabel}`} variant="outlined" />
         </Stack>
       </Stack>
 
@@ -795,13 +804,30 @@ export function ManageSubscriptionPage() {
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                   <TextField
-                    label="Monthly Price (QORT)"
+                    label="Price (QORT)"
                     type="number"
                     value={priceQort}
                     onChange={(e) => setPriceQort(Number(e.target.value))}
                     inputProps={{ min: 0, step: 0.1 }}
                     fullWidth
                   />
+                  <FormControl fullWidth>
+                    <InputLabel id="interval-label">
+                      Billing Interval
+                    </InputLabel>
+                    <Select
+                      labelId="interval-label"
+                      label="Billing Interval"
+                      value={intervalDays}
+                      onChange={(e) => setIntervalDays(Number(e.target.value))}
+                    >
+                      <MenuItem value={1}>Daily (1 day)</MenuItem>
+                      <MenuItem value={30}>Monthly (30 days)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Stack>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                   <TextField
                     label="Grace Period (days)"
                     type="number"
