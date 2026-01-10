@@ -12,7 +12,7 @@ export type GroupMembersResponse = {
   members: GroupMember[];
 };
 
-export function useGroupMembers(groupId: number | null, limit: number = 100) {
+export function useGroupMembers(groupId: number | null, limit: number = 100, refreshKey: number = 0) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [memberCount, setMemberCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -58,7 +58,7 @@ export function useGroupMembers(groupId: number | null, limit: number = 100) {
     return () => {
       cancelled = true;
     };
-  }, [groupId, limit]);
+  }, [groupId, limit, refreshKey]);
 
   return {
     members,

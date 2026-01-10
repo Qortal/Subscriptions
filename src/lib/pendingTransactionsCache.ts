@@ -32,7 +32,7 @@ const CACHE_KEY_OWNER_ACTIONS = `${CACHE_KEY_PREFIX}owner_actions`;
 // Cache expiration times (in milliseconds)
 const CACHE_EXPIRATION_SUBSCRIPTION = 3 * 60 * 1000; // 3 minutes
 const CACHE_EXPIRATION_SUBSCRIBE_ACTION = 3 * 60 * 1000; // 3 minutes
-const CACHE_EXPIRATION_OWNER_ACTION = 3 * 60 * 1000; // 3 minutes
+const CACHE_EXPIRATION_OWNER_ACTION = 2 * 60 * 1000; // 2 minutes (for re-encrypt actions)
 
 // Type definitions
 export type PendingSubscription = {

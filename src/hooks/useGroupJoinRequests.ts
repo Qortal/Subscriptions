@@ -9,7 +9,7 @@ export type JoinRequest = {
 /**
  * Hook to fetch pending join requests for a group
  */
-export function useGroupJoinRequests(groupId: number | null) {
+export function useGroupJoinRequests(groupId: number | null, refreshKey: number = 0) {
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function useGroupJoinRequests(groupId: number | null) {
     return () => {
       cancelled = true;
     };
-  }, [groupId]);
+  }, [groupId, refreshKey]);
 
   return {
     joinRequests,

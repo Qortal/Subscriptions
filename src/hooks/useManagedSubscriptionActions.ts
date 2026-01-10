@@ -26,7 +26,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
   const { auth, identifierOperations } = useGlobal();
   const { fetchPublish } = usePublish(3, 'JSON');
   const { joinRequests, loading: joinRequestsLoading } = useGroupJoinRequests(groupId);
-  const { members, loading: membersLoading } = useGroupMembers(groupId, 100);
+  const { members, loading: membersLoading } = useGroupMembers(groupId, 0);
   const pendingOwnerActions = useAtomValue(pendingOwnerActionsAtom);
   
   const shouldReEncrypt = useValidateGroupKeys(groupId ?? 0);
@@ -35,6 +35,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
   const [priceQort, setPriceQort] = useState<number>(1);
   const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
+  const [subscriptionStates, setSubscriptionStates] = useState<any[] | undefined>(undefined);
 
   // Get the details identifier and pricing info
   useEffect(() => {
@@ -62,6 +63,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
         const details = detailsRes?.resource?.data as any;
         if (details) {
           if (details.states && details.states.length > 0) {
+            setSubscriptionStates(details.states);
             const currentState = details.states[details.states.length - 1];
             setPriceQort(currentState.price || 1);
             const intervalDays = currentState.interval === 'DAY' ? 1 : 
@@ -122,7 +124,6 @@ export function useManagedSubscriptionActions(groupId: number | null) {
   );
 
   // Check payment status for members
-  const subscriptionStates = undefined; // We'll rely on the hook to fetch payment records
   const {
     isPaid,
     loading: paymentsLoading,

@@ -15,7 +15,7 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { useGlobal } from 'qapp-core';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { homeTabAtom } from '../state/ui';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
 import { useInitializeMySubscriptions } from '../hooks/useInitializeMySubscriptions';
@@ -26,12 +26,15 @@ import { ManagedSubscriptionCard } from '../components/ManagedSubscriptionCard';
 import { useAllManagedSubscriptionActions } from '../hooks/useAllManagedSubscriptionActions';
 import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscriptionActions';
 
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
 export function HomePage() {
   const navigate = useNavigate();
   const { auth } = useGlobal();
 
   const [tab, setTab] = useAtom(homeTabAtom);
   const [refreshKey, setRefreshKey] = useState(0);
+  const isRefreshingRef = useRef(false);
 
   const {
     mySubscriptions: currentSubs,
@@ -50,8 +53,34 @@ export function HomePage() {
   const { actions: currentActions, loading: currentActionsLoading } =
     useAllCurrentSubscriptionActions(currentSubs);
 
+  // Track loading state to prevent concurrent fetches
+  useEffect(() => {
+    if (subsLoading || managedLoading) {
+      isRefreshingRef.current = true;
+    } else {
+      isRefreshingRef.current = false;
+    }
+  }, [subsLoading, managedLoading]);
+
+  // Auto-refresh every 2 minutes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // Only refresh if not currently loading
+      if (!isRefreshingRef.current) {
+        setRefreshKey((prev) => prev + 1);
+      }
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
   const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1);
+    // Only allow manual refresh if not currently loading
+    if (!isRefreshingRef.current) {
+      setRefreshKey((prev) => prev + 1);
+    }
   };
 
   return (

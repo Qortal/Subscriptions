@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { pendingOwnerActionsAtom } from '../lib/pendingTransactionsCache';
 
 export function base64ToUint8Array(base64: string) {
   const binaryString = atob(base64);
@@ -85,7 +87,7 @@ export const getGroupMembers = async (groupNumber: number) => {
   return groupData;
 };
 
-export const useValidateGroupKeys = (groupId: number) => {
+export const useValidateGroupKeys = (groupId: number, refreshKey: number = 0) => {
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState<
     number | null
@@ -97,6 +99,9 @@ export const useValidateGroupKeys = (groupId: number) => {
   >(null);
   const [members, setMembers] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Get pending owner actions from cache to check for recent re-encryption
+  const pendingOwnerActions = useAtomValue(pendingOwnerActionsAtom);
 
   useEffect(() => {
     if (!groupId) return;
@@ -149,10 +154,23 @@ export const useValidateGroupKeys = (groupId: number) => {
     fetchData();
 
     // TODO: Implement group keys validation logic
-  }, [groupId]);
+  }, [groupId, refreshKey]);
 
   const shouldReEncrypt = useMemo(() => {
     if (isLoading) return false;
+
+    // Check for recent re-encryption in cache (2-minute window)
+    const recentReEncrypt = pendingOwnerActions.find(
+      (action) =>
+        action.type === 're-encrypt' &&
+        action.groupId === groupId &&
+        action.expiresAt > Date.now()
+    );
+
+    // If there's a recent re-encryption action in cache, don't show alert/button
+    if (recentReEncrypt) {
+      return false;
+    }
 
     // Re-encryption check based purely on blockchain state (no cache involved)
     if (triedToFetchSecretKey && !secretKeyPublishDate) return true;
@@ -182,6 +200,8 @@ export const useValidateGroupKeys = (groupId: number) => {
     newEncryptionNotification,
     triedToFetchSecretKey,
     isLoading,
+    pendingOwnerActions,
+    groupId,
   ]);
 
   return shouldReEncrypt;

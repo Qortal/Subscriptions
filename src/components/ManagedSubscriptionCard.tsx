@@ -60,7 +60,7 @@ export function ManagedSubscriptionCard(props: {
     [groupId]
   );
 
-  const { actions } = useManagedSubscriptionActions(groupId);
+  const { actions, loading: actionsLoading } = useManagedSubscriptionActions(groupId);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,12 +249,16 @@ export function ManagedSubscriptionCard(props: {
               size="small"
               variant="outlined"
             />
-            <Chip
-              label={`${unpaidCount} unpaid`}
-              size="small"
-              variant="outlined"
-              color={unpaidCount > 0 ? 'warning' : 'success'}
-            />
+            {actionsLoading ? (
+              <Skeleton variant="rounded" width={90} height={24} />
+            ) : (
+              <Chip
+                label={`${unpaidCount} unpaid`}
+                size="small"
+                variant="outlined"
+                color={unpaidCount > 0 ? 'warning' : 'success'}
+              />
+            )}
             <Chip
               label={`${revenueQort} QORT/mo est.`}
               size="small"

@@ -55,6 +55,8 @@ import { useValidateJoinRequests } from '../hooks/useValidateJoinRequests';
 import { useValidateGroupKeys } from '../hooks/useValidateGroupKeys';
 import { inviteToGroup, kickFromGroup } from '../lib/subscriptionPayment';
 
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
 type AnyGroup = Record<string, unknown>;
 
 function getGroupId(group: AnyGroup): number | null {
@@ -75,6 +77,7 @@ export function ManageSubscriptionPage() {
   const { groupId: groupIdParam } = useParams();
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const isRefreshingRef = useRef(false);
 
   const {
     managedSubscriptions: managed,
@@ -108,14 +111,16 @@ export function ManageSubscriptionPage() {
     members,
     memberCount,
     loading: membersLoading,
-  } = useGroupMembers(groupId, 100);
+  } = useGroupMembers(groupId, 0, refreshKey);
 
   // Get group owner address to exclude from subscriber lists
   const groupOwnerAddress = auth?.address ?? null;
 
   // Fetch join requests
-  const { joinRequests, loading: joinRequestsLoading } =
-    useGroupJoinRequests(groupId);
+  const { joinRequests, loading: joinRequestsLoading } = useGroupJoinRequests(
+    groupId,
+    refreshKey
+  );
 
   // Filter out join requests that have pending invites in cache
   const filteredJoinRequests = useMemo(() => {
@@ -154,7 +159,7 @@ export function ManageSubscriptionPage() {
 
   const getDisplayName = useGetDisplayName();
 
-  const shouldReEncryptGroupKeys = useValidateGroupKeys(groupId!);
+  const shouldReEncryptGroupKeys = useValidateGroupKeys(groupId!, refreshKey);
 
   const [details, setDetails] = useState<SubscriptionFullDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -489,7 +494,7 @@ export function ManageSubscriptionPage() {
           memberCount: memberCount || 0,
           reEncryptTimestamp: now,
           timestamp: now,
-          expiresAt: now + 3 * 60 * 1000, // 3 minutes
+          expiresAt: now + 2 * 60 * 1000, // 2 minutes
         };
 
         // Remove any existing re-encrypt for this group, then add new one
@@ -567,8 +572,39 @@ export function ManageSubscriptionPage() {
   }
 
   const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1);
+    // Only allow manual refresh if not currently loading
+    if (!isRefreshingRef.current) {
+      setRefreshKey((prev) => prev + 1);
+    }
   };
+
+  // Track loading state to prevent concurrent fetches
+  useEffect(() => {
+    if (
+      managedLoading ||
+      membersLoading ||
+      joinRequestsLoading ||
+      paymentsLoading
+    ) {
+      isRefreshingRef.current = true;
+    } else {
+      isRefreshingRef.current = false;
+    }
+  }, [managedLoading, membersLoading, joinRequestsLoading, paymentsLoading]);
+
+  // Auto-refresh every 2 minutes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // Only refresh if not currently loading
+      if (!isRefreshingRef.current) {
+        setRefreshKey((prev) => prev + 1);
+      }
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
 
   async function handleToggleStatus() {
     if (!details || !subscriptionId || !auth?.name || !identifierOperations) {
@@ -760,7 +796,7 @@ export function ManageSubscriptionPage() {
           severity="warning"
           action={
             <Button
-              color="inherit"
+              color="error"
               size="small"
               onClick={handleReencryptGroupKeys}
               disabled={isReencrypting}
