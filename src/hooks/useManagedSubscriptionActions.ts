@@ -6,7 +6,10 @@ import { useGroupMembers } from './useGroupMembers';
 import { useValidateGroupKeys } from './useValidateGroupKeys';
 import { useValidateJoinRequests } from './useValidateJoinRequests';
 import { useSubscriberPaymentStatus } from './useSubscriberPaymentStatus';
-import { buildSubscriptionIdentifiers, getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+import {
+  buildSubscriptionIdentifiers,
+  getSubscriptionIdForGroup,
+} from '../lib/subscriptionPublishing';
 import { pendingOwnerActionsAtom } from '../lib/pendingTransactionsCache';
 
 export type SubscriptionActions = {
@@ -25,17 +28,22 @@ export type SubscriptionActions = {
 export function useManagedSubscriptionActions(groupId: number | null) {
   const { auth, identifierOperations } = useGlobal();
   const { fetchPublish } = usePublish(3, 'JSON');
-  const { joinRequests, loading: joinRequestsLoading } = useGroupJoinRequests(groupId);
+  const { joinRequests, loading: joinRequestsLoading } =
+    useGroupJoinRequests(groupId);
   const { members, loading: membersLoading } = useGroupMembers(groupId, 0);
   const pendingOwnerActions = useAtomValue(pendingOwnerActionsAtom);
-  
+
   const shouldReEncrypt = useValidateGroupKeys(groupId ?? 0);
-  
-  const [detailsIdentifier, setDetailsIdentifier] = useState<string | null>(null);
+
+  const [detailsIdentifier, setDetailsIdentifier] = useState<string | null>(
+    null
+  );
   const [priceQort, setPriceQort] = useState<number>(1);
   const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
-  const [subscriptionStates, setSubscriptionStates] = useState<any[] | undefined>(undefined);
+  const [subscriptionStates, setSubscriptionStates] = useState<
+    any[] | undefined
+  >(undefined);
 
   // Get the details identifier and pricing info
   useEffect(() => {
@@ -47,10 +55,11 @@ export function useManagedSubscriptionActions(groupId: number | null) {
     async function fetchDetailsAndPricing() {
       try {
         const subscriptionId = getSubscriptionIdForGroup(groupId!);
-        const { detailsIdentifier: identifier } = await buildSubscriptionIdentifiers(
-          identifierOperations!,
-          subscriptionId
-        );
+        const { detailsIdentifier: identifier } =
+          await buildSubscriptionIdentifiers(
+            identifierOperations!,
+            subscriptionId
+          );
         setDetailsIdentifier(identifier);
 
         // Fetch subscription details to get pricing
@@ -66,9 +75,16 @@ export function useManagedSubscriptionActions(groupId: number | null) {
             setSubscriptionStates(details.states);
             const currentState = details.states[details.states.length - 1];
             setPriceQort(currentState.price || 1);
-            const intervalDays = currentState.interval === 'DAY' ? 1 : 
-                                 currentState.interval === 'WEEK' ? 7 : 
-                                 currentState.interval === 'YEAR' ? 365 : 30;
+            const intervalDays =
+              currentState.interval === 'HOUR'
+                ? 1 / 24
+                : currentState.interval === 'DAY'
+                  ? 1
+                  : currentState.interval === 'WEEK'
+                    ? 7
+                    : currentState.interval === 'YEAR'
+                      ? 365
+                      : 30;
             setIntervalDays(intervalDays);
           } else if (details.amountQort) {
             setPriceQort(Number(details.amountQort));
@@ -87,7 +103,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
     }
 
     fetchDetailsAndPricing();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, auth?.name, identifierOperations]);
 
   // Get join request addresses
@@ -95,49 +111,45 @@ export function useManagedSubscriptionActions(groupId: number | null) {
     () => joinRequests.map((jr) => jr.joiner),
     [joinRequests]
   );
+  const memberSubscribers = useMemo(
+    () =>
+      members
+        .filter((m) => {
+          if (m.member === auth?.address) return false;
+          if (m.primaryName == null || m.primaryName === '') return false;
 
-  // Get member addresses (excluding owner and pending kicks)
-  const memberAddresses = useMemo(
-    () => members
-      .filter((m) => {
-        if (m.member === auth?.address) return false;
-        
-        // Check if there's a pending kick for this member
-        const pendingKick = pendingOwnerActions.find(
-          (action) =>
-            action.type === 'kick' &&
-            action.groupId === groupId &&
-            action.kickedAddress === m.member &&
-            action.expiresAt > Date.now()
-        );
-        
-        return !pendingKick;
-      })
-      .map((m) => m.member),
+          const pendingKick = pendingOwnerActions.find(
+            (action) =>
+              action.type === 'kick' &&
+              action.groupId === groupId &&
+              action.kickedAddress === m.member &&
+              action.expiresAt > Date.now()
+          );
+
+          return !pendingKick;
+        })
+        .map((m) => ({
+          address: m.member,
+          primaryName: m.primaryName ?? null,
+        })),
     [members, auth?.address, pendingOwnerActions, groupId]
   );
 
-  // Validate join requests
-  const { validations, loading: validatingJoinRequests } = useValidateJoinRequests(
-    joinRequesterAddresses,
-    detailsIdentifier
-  );
+  const { validations, loading: validatingJoinRequests } =
+    useValidateJoinRequests(joinRequesterAddresses, detailsIdentifier);
 
-  // Check payment status for members
-  const {
-    isPaid,
-    loading: paymentsLoading,
-  } = useSubscriberPaymentStatus(
-    memberAddresses,
+  const { isPaid, loading: paymentsLoading } = useSubscriberPaymentStatus(
+    memberSubscribers,
     detailsIdentifier,
     auth?.address ?? null,
+    auth?.name ?? null,
     priceQort,
     subscriptionStates,
     intervalDays,
     graceDays,
     true // excludeOwner
   );
-  
+
   const [actions, setActions] = useState<SubscriptionActions>({
     groupId: groupId ?? 0,
     pendingJoinRequests: 0,
@@ -165,7 +177,9 @@ export function useManagedSubscriptionActions(groupId: number | null) {
     }).length;
 
     // Count unpaid members (excluding those in grace period)
-    const unpaidCount = memberAddresses.filter((address) => !isPaid(address)).length;
+    const unpaidCount = memberSubscribers.filter(
+      (s) => !isPaid(s.address)
+    ).length;
 
     const needsEncryption = shouldReEncrypt;
     const total = validJoinRequestCount + (needsEncryption ? 1 : 0);
@@ -177,12 +191,22 @@ export function useManagedSubscriptionActions(groupId: number | null) {
       unpaidMembersCount: unpaidCount,
       totalActions: total,
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, joinRequests, validations, shouldReEncrypt, memberAddresses, paymentsLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    groupId,
+    joinRequests,
+    validations,
+    shouldReEncrypt,
+    memberSubscribers,
+    paymentsLoading,
+  ]);
 
   return {
     actions,
-    loading: joinRequestsLoading || validatingJoinRequests || membersLoading || paymentsLoading,
+    loading:
+      joinRequestsLoading ||
+      validatingJoinRequests ||
+      membersLoading ||
+      paymentsLoading,
   };
 }
-

@@ -38,7 +38,8 @@ function getGroupName(group: AnyGroup): string {
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'daily' | 'monthly' | 'yearly' {
+): 'hourly' | 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays < 0.1) return 'hourly';
   if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
@@ -133,9 +134,11 @@ export function ManagedSubscriptionCard(props: {
   const revenueQort =
     billingInterval === 'yearly'
       ? Math.round((gross / 12) * 100) / 100
-      : billingInterval === 'daily'
-        ? Math.round(gross * 30 * 100) / 100 // Convert to monthly estimate
-        : Math.round(gross * 100) / 100;
+      : billingInterval === 'hourly'
+        ? Math.round(gross * 24 * 30 * 100) / 100 // Convert to monthly estimate
+        : billingInterval === 'daily'
+          ? Math.round(gross * 30 * 100) / 100 // Convert to monthly estimate
+          : Math.round(gross * 100) / 100;
 
   // Get unpaid count from actions hook
   const unpaidCount = actions.unpaidMembersCount;

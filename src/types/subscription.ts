@@ -1,4 +1,4 @@
-export type BillingInterval = 'daily' | 'monthly' | 'yearly';
+export type BillingInterval = 'hourly' | 'daily' | 'monthly' | 'yearly';
 
 // UI wording: "Private groups" (we treat any non-open/closed group as private for this app)
 export type GroupAccessType = 'private';
@@ -26,6 +26,8 @@ export type MySubscription = {
   billingInterval: BillingInterval;
   status: 'active' | 'paused' | 'cancelled';
   nextPaymentDue: string; // ISO date string
+  /** Subscription is disabled (owner not accepting new subscribers); show "Not active" instead of payment/due */
+  subscriptionDisabled?: boolean;
 };
 
 export type Subscriber = {
@@ -40,7 +42,7 @@ export type Subscriber = {
 export type SubscriptionState = {
   version: number;
   price: number;
-  interval: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+  interval: 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
   effectiveFrom: number; // Unix timestamp in milliseconds
 };
 
@@ -108,5 +110,6 @@ export type MemberGroup = {
   name: string;
   access: GroupAccessType;
   ownerAddress: string;
+  ownerPrimaryName: string | null;
   raw?: unknown;
 };

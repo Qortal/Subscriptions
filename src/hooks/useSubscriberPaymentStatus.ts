@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
+import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
 
 export type SubscriptionRecord = {
   si: string; // subscriptionIndexIdentifier
@@ -14,20 +15,25 @@ export type SubscriberPaymentInfo = {
   lastPaymentTx?: string;
   lastPaymentDate?: number;
   subscriptionRecord?: SubscriptionRecord;
-  expiresAt?: number; // When the subscription expires (including grace period)
+  expiresAt?: number; // When the paid period ends (excludes grace period)
 };
 
 export type SubscriptionState = {
   version: number;
   price: number;
-  interval: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+  interval: 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
   effectiveFrom: number; // Unix timestamp in milliseconds
+};
+
+export type SubscriberItem = {
+  address: string;
+  primaryName: string | null;
 };
 
 /**
  * Get the price that was active at a given timestamp
  */
-function getPriceAtTime(
+export function getPriceAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentPrice: number
@@ -77,6 +83,8 @@ function getIntervalDaysAtTime(
       const interval = sortedStates[i].interval;
       // Convert interval enum to days
       switch (interval) {
+        case 'HOUR':
+          return 1 / 24;
         case 'DAY':
           return 1;
         case 'WEEK':
@@ -101,13 +109,14 @@ function getIntervalDaysAtTime(
  * Validates: transaction exists, amount matches historical price, recipient is correct, subscription not expired
  */
 export function useSubscriberPaymentStatus(
-  subscribers: string[], // Array of subscriber addresses
-  detailsIdentifier: string | null, // The subscription details identifier
-  subscriptionOwnerAddress: string | null, // The subscription owner's address
-  subscriptionPrice: number, // The current subscription price in QORT
-  subscriptionStates: SubscriptionState[] | undefined, // Historical pricing states
-  intervalDays: number, // Subscription interval in days
-  graceDays: number, // Grace period in days
+  subscribers: SubscriberItem[],
+  detailsIdentifier: string | null,
+  subscriptionOwnerAddress: string | null,
+  subscriptionOwnerName: string | null,
+  subscriptionPrice: number,
+  subscriptionStates: SubscriptionState[] | undefined,
+  intervalDays: number,
+  graceDays: number,
   enabled = true
 ) {
   const { lists } = useGlobal();
@@ -121,6 +130,7 @@ export function useSubscriberPaymentStatus(
       !enabled ||
       !detailsIdentifier ||
       !subscriptionOwnerAddress ||
+      !subscriptionOwnerName ||
       subscribers.length === 0
     ) {
       setPaymentInfo(new Map());
@@ -133,15 +143,13 @@ export function useSubscriberPaymentStatus(
       setLoading(true);
       const newPaymentInfo = new Map<string, SubscriberPaymentInfo>();
 
-      // Filter out the owner from subscribers - owner doesn't need to pay
       const subscribersExcludingOwner = subscribers.filter(
-        (address) => address !== subscriptionOwnerAddress
+        (s) => s.address !== subscriptionOwnerAddress
       );
 
-      // Initialize all subscribers (excluding owner) as checking
-      for (const address of subscribersExcludingOwner) {
-        newPaymentInfo.set(address, {
-          address,
+      for (const s of subscribersExcludingOwner) {
+        newPaymentInfo.set(s.address, {
+          address: s.address,
           status: 'checking',
         });
       }
@@ -150,22 +158,15 @@ export function useSubscriberPaymentStatus(
         setPaymentInfo(new Map(newPaymentInfo));
       }
 
-      // Fetch payment records for each subscriber (excluding owner)
       const results = await Promise.allSettled(
-        subscribersExcludingOwner.map(async (address) => {
-          try {
-            // Fetch the subscriber's PRODUCT records with this identifier
-            // We need to get their primary name first to search by name
-            const nameResponse = await fetch(`/names/primary/${address}`);
-            let subscriberName: string | null = null;
+        subscribersExcludingOwner.map(async (s) => {
+          const address = s.address;
+          const subscriberName = s.primaryName;
 
-            if (nameResponse.ok) {
-              const nameData = await nameResponse.json();
-              subscriberName = nameData?.name ?? null;
-            }
+          try {
+            let intervalDaysAtPayment: number = intervalDays;
 
             if (!subscriberName) {
-              // No registered name, can't have published a subscription record
               return {
                 address,
                 status: 'unpaid' as PaymentStatus,
@@ -188,7 +189,7 @@ export function useSubscriberPaymentStatus(
               limit: 1,
               reverse: true, // Get most recent
             });
-
+            console.log('resources', resources);
             if (!resources || resources.length === 0) {
               return {
                 address,
@@ -211,7 +212,7 @@ export function useSubscriberPaymentStatus(
                 error
               );
             }
-
+            console.log('recordData', recordData);
             if (!recordData || !recordData.tx) {
               return {
                 address,
@@ -245,17 +246,25 @@ export function useSubscriberPaymentStatus(
                 }
                 // Validate amount matches the price that was active at payment time
                 else if (paymentTimestamp) {
-                  const expectedPrice = getPriceAtTime(
-                    subscriptionStates,
-                    paymentTimestamp,
-                    subscriptionPrice
+                  console.log(
+                    'subscriptionOwnerName',
+                    subscriptionOwnerName,
+                    recordData.si
                   );
+                  const indexData = await fetchSubscriptionIndexPrice(
+                    subscriptionOwnerName!,
+                    recordData.si
+                  );
+                  const expectedPrice = indexData?.priceQort ?? null;
+                  intervalDaysAtPayment =
+                    indexData?.intervalDays ?? intervalDays;
 
-                  if (Math.abs(txData?.amount - expectedPrice) > 0.00001) {
-                    validationError = `Payment amount ${txData?.amount} doesn't match expected price ${expectedPrice} (price at time of payment: ${new Date(paymentTimestamp).toLocaleDateString()})`;
-                  } else {
-                    // All validations passed
+                  if (expectedPrice == null) {
+                    validationError = 'Could not get price at time of payment';
+                  } else if (+txData?.amount < expectedPrice - 0.00001) {
                     paymentValid = true;
+                  } else {
+                    validationError = `Payment amount ${txData?.amount} doesn't match expected price ${expectedPrice} (price at time of payment: ${new Date(paymentTimestamp).toLocaleDateString()})`;
                   }
                 } else {
                   validationError = 'Payment timestamp missing';
@@ -280,19 +289,12 @@ export function useSubscriberPaymentStatus(
             let expiresAt: number | undefined;
 
             if (paymentValid && paymentTimestamp) {
-              // Get the interval that was active when they paid
-              const intervalDaysAtPayment = getIntervalDaysAtTime(
-                subscriptionStates,
-                paymentTimestamp,
-                intervalDays
-              );
-
-              // Calculate when the subscription expires (payment date + historical interval + grace period)
               const subscriptionEndsAt =
-                paymentTimestamp + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+                paymentTimestamp +
+                intervalDaysAtPayment * 24 * 60 * 60 * 1000;
               const graceEndsAt =
                 subscriptionEndsAt + graceDays * 24 * 60 * 60 * 1000;
-              expiresAt = graceEndsAt;
+              expiresAt = subscriptionEndsAt;
 
               const now = Date.now();
 
@@ -329,13 +331,13 @@ export function useSubscriberPaymentStatus(
         })
       );
 
-      // Update payment info with results
       results.forEach((result, index) => {
+        const { address } = subscribersExcludingOwner[index];
         if (result.status === 'fulfilled') {
-          newPaymentInfo.set(subscribersExcludingOwner[index], result.value);
+          newPaymentInfo.set(address, result.value);
         } else {
-          newPaymentInfo.set(subscribersExcludingOwner[index], {
-            address: subscribersExcludingOwner[index],
+          newPaymentInfo.set(address, {
+            address,
             status: 'unpaid',
           });
         }
@@ -353,9 +355,10 @@ export function useSubscriberPaymentStatus(
       cancelled = true;
     };
   }, [
-    subscribers.join(','),
+    subscribers.map((s) => `${s.address}:${s.primaryName}`).join(','),
     detailsIdentifier,
     subscriptionOwnerAddress,
+    subscriptionOwnerName,
     subscriptionPrice,
     subscriptionStates,
     intervalDays,

@@ -43,17 +43,6 @@ const getPublishesFromAdmins = async (admins: string[], groupId: number) => {
   return sortedData[0];
 };
 
-export async function getNameInfo(address: string) {
-  const response = await fetch(`/names/primary/` + address);
-  const nameData = await response.json();
-
-  if (nameData?.name) {
-    return nameData?.name;
-  } else {
-    return '';
-  }
-}
-
 export const getGroupAdmins = async (groupNumber: number) => {
   const response = await fetch(
     `/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
@@ -65,7 +54,7 @@ export const getGroupAdmins = async (groupNumber: number) => {
 
   const getMemNames = groupData?.members?.map(async (member: any) => {
     if (member?.member) {
-      const name = await getNameInfo(member.member);
+      const name = member.primaryName;
       if (name) {
         members.push(name);
         both.push({ name, address: member.member });

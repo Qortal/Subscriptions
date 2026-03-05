@@ -1,7 +1,25 @@
 import { Box, Button, Card, CardActions, CardContent, Chip, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 import type { MySubscription } from '../types/subscription';
 
 type AnyGroup = Record<string, unknown>;
+
+function formatTimeLeft(expiresAtMs: number): string {
+  const now = Date.now();
+  const ms = expiresAtMs - now;
+  if (ms <= 0) return 'Due';
+  const mins = Math.floor(ms / (60 * 1000));
+  const hours = Math.floor(ms / (60 * 60 * 1000));
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+  if (years > 0) return `${years} year${years !== 1 ? 's' : ''} left`;
+  if (months > 0) return `${months} month${months !== 1 ? 's' : ''} left`;
+  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} left`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} left`;
+  if (mins > 0) return `${mins} min${mins !== 1 ? 's' : ''} left`;
+  return 'Due';
+}
 
 function getGroupName(groupInfo: unknown): string | null {
   if (!groupInfo || typeof groupInfo !== 'object') return null;
@@ -29,11 +47,27 @@ function isPending(groupInfo: unknown): boolean {
 export function CurrentSubscriptionCard(props: {
   subscription: MySubscription;
   onView: (id: string) => void;
+  needsPayment?: boolean;
+  /** When set, show this (locked-in from PRODUCT si) instead of subscription.priceQort / billingInterval */
+  displayPriceQort?: number;
+  displayBillingInterval?: string;
+  /** When set, show "X mins/hours/days left" instead of nextPaymentDue date */
+  expiresAt?: number;
 }) {
-  const { subscription: s, onView } = props;
+  const { subscription: s, onView, needsPayment, displayPriceQort, displayBillingInterval, expiresAt } = props;
   const groupName = getGroupName(s.groupInfo);
   const groupId = getGroupId(s.groupInfo);
   const pendingApproval = isPending(s.groupInfo);
+
+  const [timeLeft, setTimeLeft] = useState<string>(
+    () => (expiresAt != null ? formatTimeLeft(expiresAt) : '')
+  );
+  useEffect(() => {
+    if (expiresAt == null) return;
+    setTimeLeft(formatTimeLeft(expiresAt));
+    const interval = setInterval(() => setTimeLeft(formatTimeLeft(expiresAt)), 60 * 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
 
   return (
     <Card variant="outlined">
@@ -85,14 +119,27 @@ export function CurrentSubscriptionCard(props: {
               size="small"
             />
             <Chip
-              label={`${s.priceQort} QORT / ${s.billingInterval}`}
+              label={`${displayPriceQort ?? s.priceQort} QORT / ${displayBillingInterval ?? s.billingInterval}`}
               size="small"
               variant="outlined"
             />
             <Chip
-              label={`Next due: ${s.nextPaymentDue}`}
+              label={
+                s.subscriptionDisabled
+                  ? 'Not active'
+                  : needsPayment
+                    ? 'Payment required'
+                    : timeLeft ? `Next due: ${timeLeft}` : `Next due: ${s.nextPaymentDue}`
+              }
               size="small"
               variant="outlined"
+              color={
+                s.subscriptionDisabled
+                  ? 'default'
+                  : needsPayment
+                    ? 'error'
+                    : 'default'
+              }
             />
           </Stack>
         </Stack>

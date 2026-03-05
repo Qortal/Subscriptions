@@ -35,24 +35,6 @@ import { useTestIdentifiers } from '../constants';
 import { EnumCollisionStrength } from 'qapp-core';
 
 /**
- * Get the primary name for an address
- */
-async function getPrimaryName(address: string): Promise<string | null> {
-  try {
-    const response = await fetch(`/names/primary/${address}`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data?.name || null;
-  } catch (error) {
-    console.error(
-      '[checkGroupHasSubscription] Failed to fetch primary name:',
-      error
-    );
-    return null;
-  }
-}
-
-/**
  * Build the subscription details identifier for a group
  */
 async function buildDetailsIdentifier(
@@ -134,14 +116,14 @@ export async function checkGroupHasSubscription(
 
     const groupData = await groupResponse.json();
     const groupOwner = groupData?.owner || groupData?.ownerAddress;
-
+    console.log('groupOwner', groupOwner);
     if (!groupOwner) {
       console.error('[checkGroupHasSubscription] Group has no owner');
       return { exists: false };
     }
 
     // Step 2: Get owner's primary name
-    const ownerName = await getPrimaryName(groupOwner);
+    const ownerName = groupData.ownerPrimaryName;
     if (!ownerName) {
       // No primary name = no subscription can be enabled
       return { exists: false };

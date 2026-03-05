@@ -54,8 +54,9 @@ import { useGroupJoinRequests } from '../hooks/useGroupJoinRequests';
 import { useValidateJoinRequests } from '../hooks/useValidateJoinRequests';
 import { useValidateGroupKeys } from '../hooks/useValidateGroupKeys';
 import { inviteToGroup, kickFromGroup } from '../lib/subscriptionPayment';
+import { HOURLY_INTERVAL_DAYS, GRACE_20_MIN_DAYS } from '../constants';
 
-const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const AUTO_REFRESH_INTERVAL = 20 * 1000; // 2 minutes
 
 type AnyGroup = Record<string, unknown>;
 
@@ -140,15 +141,21 @@ export function ManageSubscriptionPage() {
     });
   }, [joinRequests, groupId, pendingOwnerActions]);
 
-  // Fetch primary names for all members (excluding owner)
-  const memberAddresses = useMemo(
+  const memberSubscribers = useMemo(
     () =>
       members
-        .filter((m) => m.member !== groupOwnerAddress)
-        .map((m) => m.member),
+        .filter(
+          (m) =>
+            m.member !== groupOwnerAddress &&
+            m.primaryName != null &&
+            m.primaryName !== ''
+        )
+        .map((m) => ({
+          address: m.member,
+          primaryName: m.primaryName ?? null,
+        })),
     [members, groupOwnerAddress]
   );
-  useFetchPrimaryNames(memberAddresses);
 
   // Fetch primary names for join requesters
   const joinRequesterAddresses = useMemo(
@@ -169,7 +176,7 @@ export function ManageSubscriptionPage() {
   const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
 
   const [title, setTitle] = useState('');
-  const [priceQort, setPriceQort] = useState<number>(1);
+  const [priceQortInput, setPriceQortInput] = useState<string>('1');
   const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState('');
@@ -186,6 +193,13 @@ export function ManageSubscriptionPage() {
   const [detailsIdentifier, setDetailsIdentifier] = useState<string | null>(
     null
   );
+
+  const priceQort = useMemo(() => {
+    const trimmed = priceQortInput.trim();
+    if (!trimmed) return 1;
+    const n = Number(trimmed);
+    return Number.isFinite(n) && n >= 0 ? n : 1;
+  }, [priceQortInput]);
 
   useEffect(() => {
     if (subscriptionId && identifierOperations) {
@@ -206,9 +220,10 @@ export function ManageSubscriptionPage() {
     isPaid,
     isInGracePeriod,
   } = useSubscriberPaymentStatus(
-    memberAddresses,
+    memberSubscribers,
     detailsIdentifier,
     auth?.address ?? null,
+    auth?.name,
     priceQort,
     subscriptionStates,
     intervalDays,
@@ -276,7 +291,7 @@ export function ManageSubscriptionPage() {
 
     if (anyDetails.amountQort != null) {
       const n = Number(anyDetails.amountQort);
-      if (Number.isFinite(n)) setPriceQort(n);
+      if (Number.isFinite(n)) setPriceQortInput(String(n));
     }
     if (typeof anyDetails.intervalDays === 'number') {
       setIntervalDays(anyDetails.intervalDays);
@@ -301,8 +316,9 @@ export function ManageSubscriptionPage() {
     return members
       .filter((member) => {
         if (member.member === groupOwnerAddress) return false;
+        if (member.primaryName == null || member.primaryName === '')
+          return false;
 
-        // Check if there's a pending kick for this member
         const pendingKick = pendingOwnerActions.find(
           (action) =>
             action.type === 'kick' &&
@@ -315,7 +331,7 @@ export function ManageSubscriptionPage() {
       })
       .map((member) => ({
         address: member.member,
-        name: getDisplayName(member.member),
+        name: member.primaryName,
         joined: member.joined,
         isAdmin: member.isAdmin || false,
         isPaidUp: isPaid(member.member),
@@ -324,7 +340,6 @@ export function ManageSubscriptionPage() {
   }, [
     members,
     groupOwnerAddress,
-    getDisplayName,
     isPaid,
     isInGracePeriod,
     pendingOwnerActions,
@@ -676,7 +691,11 @@ export function ManageSubscriptionPage() {
     setPerks(updated);
   };
 
-  if (managedLoading || detailsLoading) {
+  // Only show full-page loader on initial load when we don't have data yet.
+  // On interval refresh we keep showing the form and update members/requests in the background.
+  const isInitialLoad =
+    (managedLoading || detailsLoading) && (!groupInfo || !details);
+  if (isInitialLoad) {
     return (
       <Stack spacing={2.5}>
         <Box>
@@ -739,7 +758,12 @@ export function ManageSubscriptionPage() {
   const revenueQort =
     Math.round((paidCount + graceCount) * priceQort * 100) / 100;
 
-  const revenueLabel = intervalDays === 1 ? 'QORT/day' : 'QORT/mo';
+  const revenueLabel =
+    intervalDays === HOURLY_INTERVAL_DAYS
+      ? 'QORT/hr'
+      : intervalDays === 1
+        ? 'QORT/day'
+        : 'QORT/mo';
 
   return (
     <Stack spacing={2.5}>
@@ -842,9 +866,16 @@ export function ManageSubscriptionPage() {
                   <TextField
                     label="Price (QORT)"
                     type="number"
-                    value={priceQort}
-                    onChange={(e) => setPriceQort(Number(e.target.value))}
-                    inputProps={{ min: 0, step: 0.1 }}
+                    value={priceQortInput}
+                    onChange={(e) => setPriceQortInput(e.target.value)}
+                    onBlur={() =>
+                      setPriceQortInput(
+                        Number.isFinite(priceQort) && priceQort >= 0
+                          ? String(priceQort)
+                          : '1'
+                      )
+                    }
+                    inputProps={{ min: 0, step: 0.01 }}
                     fullWidth
                   />
                   <FormControl fullWidth>
@@ -857,6 +888,9 @@ export function ManageSubscriptionPage() {
                       value={intervalDays}
                       onChange={(e) => setIntervalDays(Number(e.target.value))}
                     >
+                      <MenuItem value={HOURLY_INTERVAL_DAYS}>
+                        Hourly (for testing)
+                      </MenuItem>
                       <MenuItem value={1}>Daily (1 day)</MenuItem>
                       <MenuItem value={30}>Monthly (30 days)</MenuItem>
                     </Select>
@@ -864,14 +898,32 @@ export function ManageSubscriptionPage() {
                 </Stack>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                  <TextField
-                    label="Grace Period (days)"
-                    type="number"
-                    value={graceDays}
-                    onChange={(e) => setGraceDays(Number(e.target.value))}
-                    inputProps={{ min: 0, step: 1 }}
-                    fullWidth
-                  />
+                  <FormControl fullWidth>
+                    <InputLabel id="grace-label">Grace Period</InputLabel>
+                    <Select
+                      labelId="grace-label"
+                      label="Grace Period"
+                      value={graceDays}
+                      onChange={(e) => setGraceDays(Number(e.target.value))}
+                    >
+                      {![GRACE_20_MIN_DAYS, 3, 5, 7].includes(graceDays) &&
+                        (graceDays < 0.1 ? (
+                          <MenuItem value={graceDays}>
+                            {Math.round(graceDays * 24 * 60)} min
+                          </MenuItem>
+                        ) : (
+                          <MenuItem value={graceDays}>
+                            {graceDays} days
+                          </MenuItem>
+                        ))}
+                      <MenuItem value={GRACE_20_MIN_DAYS}>
+                        20 min (for testing)
+                      </MenuItem>
+                      <MenuItem value={3}>3 days</MenuItem>
+                      <MenuItem value={5}>5 days</MenuItem>
+                      <MenuItem value={7}>7 days</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Stack>
 
                 <TextField
@@ -962,7 +1014,7 @@ export function ManageSubscriptionPage() {
                         <Typography variant="caption" sx={{ opacity: 0.7 }}>
                           {status === 'active'
                             ? 'Accepting new subscribers'
-                            : 'Not accepting new subscribers'}
+                            : 'Not accepting new subscribers nor payments.'}
                         </Typography>
                       </Box>
                     }
@@ -1030,7 +1082,7 @@ export function ManageSubscriptionPage() {
 
               <Divider sx={{ my: 2 }} />
 
-              {membersLoading ? (
+              {membersLoading && members.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
                   Loading members...
                 </Typography>
@@ -1153,7 +1205,7 @@ export function ManageSubscriptionPage() {
 
               <Divider sx={{ my: 2 }} />
 
-              {joinRequestsLoading ? (
+              {joinRequestsLoading && joinRequests.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
                   Loading join requests...
                 </Typography>

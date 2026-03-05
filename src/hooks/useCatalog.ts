@@ -10,18 +10,11 @@ import { useOwnedGroups } from './useOwnedGroups';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'daily' | 'monthly' | 'yearly' {
+): 'hourly' | 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays < 0.1) return 'hourly';
   if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
-}
-
-async function fetchPrimaryNameForAddress(ownerAddress: string) {
-  const response = await fetch(`/names/primary/${ownerAddress}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  const name = data?.name;
-  return typeof name === 'string' && name.trim() ? name : null;
 }
 
 export function useCatalog() {
@@ -56,7 +49,7 @@ export function useCatalog() {
             if (groupId === null) return null;
 
             const ownerAddress = g.owner || '';
-            const ownerName = await fetchPrimaryNameForAddress(ownerAddress);
+            const ownerName = await g.ownerPrimaryName;
             if (!ownerName) return null;
 
             const subscriptionId = getSubscriptionIdForGroup(groupId);

@@ -188,7 +188,7 @@ export function SubscribeModal({
             <Box>
               <Typography variant="body1" gutterBottom>
                 <strong>Step 1:</strong> Send payment to{' '}
-                {isRenewal ? 'renew subscription' : 'subscribe'}
+                {isRenewal ? 'pay subscription' : 'subscribe'}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.85, mt: 1 }}>
                 You will be prompted to send <strong>{amount} QORT</strong> to

@@ -11,7 +11,8 @@ import type { SubscriptionFullDetails } from '../types/subscription';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'daily' | 'monthly' | 'yearly' {
+): 'hourly' | 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays < 0.1) return 'hourly';
   if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
@@ -20,14 +21,6 @@ function intervalDaysToBillingInterval(
 function addDaysISO(days: number) {
   const ms = Math.max(0, days) * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms).toISOString().slice(0, 10);
-}
-
-async function fetchPrimaryNameForAddress(ownerAddress: string) {
-  const response = await fetch(`/names/primary/${ownerAddress}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  const name = data?.name;
-  return typeof name === 'string' && name.trim() ? name : null;
 }
 
 async function fetchGroupInfo(groupId: number) {
@@ -45,7 +38,7 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
     loading: groupsLoading,
     error: groupsError,
   } = useMemberGroups();
-  
+
   const {
     joinRequestGroupIds,
     loading: joinRequestsLoading,
@@ -67,12 +60,9 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
         .join(','),
     [memberGroups]
   );
-  
+
   const joinRequestIdsKey = useMemo(
-    () =>
-      joinRequestGroupIds
-        .sort((a, b) => a - b)
-        .join(','),
+    () => joinRequestGroupIds.sort((a, b) => a - b).join(','),
     [joinRequestGroupIds]
   );
 
@@ -101,71 +91,73 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
           memberGroups
             .filter((g) => g.ownerAddress !== auth.address)
             .map(async (g) => {
-            // Resolve group owner primary name
-            let ownerPrimaryName = primaryNameCacheRef.current.get(
-              g.ownerAddress
-            );
-            if (ownerPrimaryName === undefined) {
-              ownerPrimaryName = await fetchPrimaryNameForAddress(
+              // Resolve group owner primary name
+              let ownerPrimaryName = primaryNameCacheRef.current.get(
                 g.ownerAddress
               );
-              primaryNameCacheRef.current.set(g.ownerAddress, ownerPrimaryName);
-            }
-            if (!ownerPrimaryName) return null;
+              if (ownerPrimaryName === undefined) {
+                ownerPrimaryName = g.ownerPrimaryName;
+                primaryNameCacheRef.current.set(
+                  g.ownerAddress,
+                  ownerPrimaryName
+                );
+              }
+              if (!ownerPrimaryName) return null;
 
-            const subscriptionId = getSubscriptionIdForGroup(g.id);
-            const { indexIdentifier, detailsIdentifier } =
-              await buildSubscriptionIdentifiers(
-                identifierOperations,
-                subscriptionId
-              );
+              const subscriptionId = getSubscriptionIdForGroup(g.id);
+              const { indexIdentifier, detailsIdentifier } =
+                await buildSubscriptionIdentifiers(
+                  identifierOperations,
+                  subscriptionId
+                );
 
-            // Only show subscriptions where the owner has published the index resource.
-            const matches = await lists.fetchResourcesResultsOnly({
-              identifier: indexIdentifier,
-              service: 'DOCUMENT',
-              name: ownerPrimaryName,
-              exactMatchNames: true,
-              limit: 1,
-            });
-            if (!matches || matches.length === 0) return null;
+              // Only show subscriptions where the owner has published the index resource.
+              const matches = await lists.fetchResourcesResultsOnly({
+                identifier: indexIdentifier,
+                service: 'DOCUMENT',
+                name: ownerPrimaryName,
+                exactMatchNames: true,
+                limit: 1,
+              });
+              if (!matches || matches.length === 0) return null;
 
-            const detailsRes = await fetchPublish({
-              name: ownerPrimaryName,
-              service: 'DOCUMENT',
-              identifier: detailsIdentifier,
-            });
-            const details = detailsRes?.resource?.data as
-              | SubscriptionFullDetails
-              | undefined;
+              const detailsRes = await fetchPublish({
+                name: ownerPrimaryName,
+                service: 'DOCUMENT',
+                identifier: detailsIdentifier,
+              });
+              const details = detailsRes?.resource?.data as
+                | SubscriptionFullDetails
+                | undefined;
 
-            const anyDetails = details as any;
-            const title =
-              details && typeof anyDetails?.title === 'string'
-                ? anyDetails.title
-                : g.name;
-            const amountQort =
-              details && anyDetails?.amountQort != null
-                ? Number(anyDetails.amountQort)
-                : 1;
-            const intervalDays =
-              details && typeof anyDetails?.intervalDays === 'number'
-                ? anyDetails.intervalDays
-                : 30;
+              const anyDetails = details as any;
+              const title =
+                details && typeof anyDetails?.title === 'string'
+                  ? anyDetails.title
+                  : g.name;
+              const amountQort =
+                details && anyDetails?.amountQort != null
+                  ? Number(anyDetails.amountQort)
+                  : 1;
+              const intervalDays =
+                details && typeof anyDetails?.intervalDays === 'number'
+                  ? anyDetails.intervalDays
+                  : 30;
 
-            const sub: MySubscription = {
-              id: subscriptionId,
-              title,
-              ownerName: ownerPrimaryName,
-              groupInfo: g,
-              priceQort: Number.isFinite(amountQort) ? amountQort : 1,
-              billingInterval: intervalDaysToBillingInterval(intervalDays),
-              status: 'active',
-              nextPaymentDue: addDaysISO(intervalDays),
-            };
+              const sub: MySubscription = {
+                id: subscriptionId,
+                title,
+                ownerName: ownerPrimaryName,
+                groupInfo: g,
+                priceQort: Number.isFinite(amountQort) ? amountQort : 1,
+                billingInterval: intervalDaysToBillingInterval(intervalDays),
+                status: 'active',
+                nextPaymentDue: addDaysISO(intervalDays),
+                subscriptionDisabled: anyDetails?.status === 'disabled',
+              };
 
-            return sub;
-          })
+              return sub;
+            })
         );
 
         // Process join request groups (pending approval)
@@ -182,10 +174,14 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
               // Skip if user is the owner of this group
               if (ownerAddress === auth.address) return null;
 
-              let ownerPrimaryName = primaryNameCacheRef.current.get(ownerAddress);
+              let ownerPrimaryName =
+                primaryNameCacheRef.current.get(ownerAddress);
               if (ownerPrimaryName === undefined) {
-                ownerPrimaryName = await fetchPrimaryNameForAddress(ownerAddress);
-                primaryNameCacheRef.current.set(ownerAddress, ownerPrimaryName);
+                ownerPrimaryName = groupInfo.ownerPrimaryName;
+                primaryNameCacheRef.current.set(
+                  ownerAddress,
+                  groupInfo.ownerPrimaryName
+                );
               }
               if (!ownerPrimaryName) return null;
 
@@ -238,6 +234,7 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
                 billingInterval: intervalDaysToBillingInterval(intervalDays),
                 status: 'paused', // Use 'paused' status for pending approval
                 nextPaymentDue: addDaysISO(intervalDays),
+                subscriptionDisabled: anyDetails?.status === 'disabled',
               };
 
               return sub;

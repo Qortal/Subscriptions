@@ -31,6 +31,9 @@ export function useCheckSubscriptionStatus(
   const [status, setStatus] = useState<SubscriptionStatus>('not-subscribed');
   const [loading, setLoading] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  /** When user has a payment record, their locked-in subscription index (si from PRODUCT) for renewals */
+  const [existingSubscriptionIndexIdentifier, setExistingSubscriptionIndexIdentifier] =
+    useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled || groupId === null || !auth?.address) {
@@ -43,6 +46,7 @@ export function useCheckSubscriptionStatus(
 
     async function checkSubscriptionStatus() {
       setLoading(true);
+      setExistingSubscriptionIndexIdentifier(null);
 
       try {
         // First, check if there's a pending subscribe action in cache
@@ -133,8 +137,28 @@ export function useCheckSubscriptionStatus(
           limit: 1,
         });
 
+        const hasPaymentRecord = resources && resources.length > 0;
+
+        // If they have a payment record, fetch PRODUCT data to get their locked-in index (si) for renewals
+        let existingIndex: string | null = null;
+        if (hasPaymentRecord && detailsIdentifier && auth.name) {
+          try {
+            const dataResponse = await fetch(
+              `/arbitrary/PRODUCT/${encodeURIComponent(auth.name)}/${encodeURIComponent(detailsIdentifier)}`
+            );
+            if (dataResponse.ok) {
+              const recordData = await dataResponse.json();
+              if (recordData && typeof recordData.si === 'string') {
+                existingIndex = recordData.si;
+              }
+            }
+          } catch {
+            // Non-fatal: we still have hasPaymentRecord, just no locked-in index for renewal
+          }
+        }
+
         if (!cancelled) {
-          const hasPaymentRecord = resources && resources.length > 0;
+          setExistingSubscriptionIndexIdentifier(existingIndex);
           // If no payment record on blockchain but we have a pending action with payment, treat as paid
           if (
             !hasPaymentRecord &&
@@ -179,5 +203,7 @@ export function useCheckSubscriptionStatus(
     isSubscribed: status !== 'not-subscribed',
     needsPayment: status === 'subscribed-unpaid',
     isOwner, // Expose whether the current user is the group owner
+    /** When set, use this for publish (renewal); otherwise use latest index (new subscriber) */
+    existingSubscriptionIndexIdentifier,
   };
 }

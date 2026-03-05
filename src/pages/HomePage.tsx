@@ -7,6 +7,7 @@ import {
   Stack,
   Tab,
   Tabs,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -15,7 +16,7 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { useGlobal } from 'qapp-core';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { homeTabAtom } from '../state/ui';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
 import { useInitializeMySubscriptions } from '../hooks/useInitializeMySubscriptions';
@@ -25,6 +26,7 @@ import { ManagedSubscriptionCardSkeleton } from '../components/ManagedSubscripti
 import { ManagedSubscriptionCard } from '../components/ManagedSubscriptionCard';
 import { useAllManagedSubscriptionActions } from '../hooks/useAllManagedSubscriptionActions';
 import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscriptionActions';
+import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
 
 const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
@@ -34,6 +36,7 @@ export function HomePage() {
 
   const [tab, setTab] = useAtom(homeTabAtom);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [testGroupId, setTestGroupId] = useState('');
   const isRefreshingRef = useRef(false);
 
   const {
@@ -52,6 +55,18 @@ export function HomePage() {
 
   const { actions: currentActions, loading: currentActionsLoading } =
     useAllCurrentSubscriptionActions(currentSubs);
+
+  // Subscriptions that need payment and are active (exclude disabled – no action required for those)
+  const activeSubscriptionsNeedingPayment = useMemo(
+    () =>
+      currentSubs.filter(
+        (s) =>
+          currentActions.subscriptionsWithActions.includes(s.id) &&
+          !s.subscriptionDisabled
+      ),
+    [currentSubs, currentActions.subscriptionsWithActions]
+  );
+  const activeNeedingPaymentCount = activeSubscriptionsNeedingPayment.length;
 
   // Track loading state to prevent concurrent fetches
   useEffect(() => {
@@ -83,6 +98,13 @@ export function HomePage() {
     }
   };
 
+  const handleOpenSubscriptionByGroupId = () => {
+    const gid = Number(testGroupId.trim());
+    if (!Number.isInteger(gid) || gid <= 0) return;
+    const subscriptionId = getSubscriptionIdForGroup(gid);
+    navigate(`/subscription/${subscriptionId}`);
+  };
+
   return (
     <Stack spacing={2.5}>
       <Stack
@@ -107,6 +129,30 @@ export function HomePage() {
             <RefreshIcon />
           </IconButton>
         </Tooltip>
+      </Stack>
+
+      {/* Test: open subscription by group ID */}
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Typography variant="body2" sx={{ opacity: 0.8 }}>
+          Test:
+        </Typography>
+        <TextField
+          size="small"
+          placeholder="Group ID"
+          type="number"
+          value={testGroupId}
+          onChange={(e) => setTestGroupId(e.target.value)}
+          inputProps={{ min: 1, step: 1 }}
+          sx={{ width: 120 }}
+        />
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={handleOpenSubscriptionByGroupId}
+          disabled={!testGroupId.trim() || !Number.isInteger(Number(testGroupId.trim())) || Number(testGroupId.trim()) <= 0}
+        >
+          Open as subscriber
+        </Button>
       </Stack>
 
       {/* Actions notification banner */}
@@ -148,8 +194,8 @@ export function HomePage() {
         </Alert>
       )}
 
-      {/* Current subscriptions payment notification banner */}
-      {!currentActionsLoading && currentActions.totalNeedingPayment > 0 && (
+      {/* Subscriptions I'm in - payment notification banner (only for active subscriptions) */}
+      {!currentActionsLoading && activeNeedingPaymentCount > 0 && (
         <Alert
           severity="error"
           icon={<NotificationsActiveIcon />}
@@ -162,9 +208,9 @@ export function HomePage() {
           }
         >
           <Typography variant="body2" fontWeight={600}>
-            {currentActions.totalNeedingPayment} subscription
-            {currentActions.totalNeedingPayment !== 1 ? 's' : ''}{' '}
-            {currentActions.totalNeedingPayment !== 1 ? 'need' : 'needs'}{' '}
+            {activeNeedingPaymentCount} subscription
+            {activeNeedingPaymentCount !== 1 ? 's' : ''}{' '}
+            {activeNeedingPaymentCount !== 1 ? 'need' : 'needs'}{' '}
             payment
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
@@ -212,8 +258,8 @@ export function HomePage() {
           onChange={(_, next) => setTab(next)}
           aria-label="home tabs"
         >
-          <Tab label="Current subscriptions" />
-          <Tab label="Managed subscriptions" />
+          <Tab label="Subscriptions I'm in" />
+          <Tab label="Subscriptions I manage" />
         </Tabs>
         <Divider sx={{ mt: 1 }} />
       </Box>
@@ -221,7 +267,7 @@ export function HomePage() {
       {tab === 0 ? (
         <Stack spacing={1.5}>
           <Typography variant="h6" fontWeight={700}>
-            Current subscriptions
+            Subscriptions I'm in
           </Typography>
 
           {currentSubs.length === 0 ? (
@@ -239,13 +285,21 @@ export function HomePage() {
               </Typography>
             )
           ) : (
-            currentSubs.map((s) => (
-              <CurrentSubscriptionCard
-                key={s.id}
-                subscription={s}
-                onView={(id) => navigate(`/subscription/${id}`)}
-              />
-            ))
+            currentSubs.map((s) => {
+              const override = currentActions.subscriptionDisplayOverrides?.[s.id];
+              const expiresAt = currentActions.subscriptionExpiresAt?.[s.id];
+              return (
+                <CurrentSubscriptionCard
+                  key={s.id}
+                  subscription={s}
+                  onView={(id) => navigate(`/subscription/${id}`)}
+                  needsPayment={currentActions.subscriptionsWithActions.includes(s.id)}
+                  displayPriceQort={override?.priceQort}
+                  displayBillingInterval={override?.billingInterval}
+                  expiresAt={expiresAt}
+                />
+              );
+            })
           )}
         </Stack>
       ) : (
@@ -257,7 +311,7 @@ export function HomePage() {
             alignItems={{ xs: 'flex-start', sm: 'center' }}
           >
             <Typography variant="h6" fontWeight={700}>
-              Managed subscriptions
+              Subscriptions I manage
             </Typography>
 
             <Button variant="contained" onClick={() => navigate('/create')}>

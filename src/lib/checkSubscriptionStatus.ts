@@ -30,6 +30,36 @@ export interface CheckSubscriptionStatusParams {
   identifierOperations: any;
 }
 
+/** Subscription pricing state (historical) */
+interface SubscriptionState {
+  version: number;
+  price: number;
+  interval: 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+  effectiveFrom: number;
+}
+
+/**
+ * Get the price that was active at a given timestamp (for payment validation)
+ */
+function getPriceAtTime(
+  states: SubscriptionState[] | undefined,
+  timestamp: number,
+  currentPrice: number
+): number {
+  if (!states || states.length === 0) {
+    return currentPrice;
+  }
+  const sortedStates = [...states].sort(
+    (a, b) => a.effectiveFrom - b.effectiveFrom
+  );
+  for (let i = sortedStates.length - 1; i >= 0; i--) {
+    if (sortedStates[i].effectiveFrom <= timestamp) {
+      return sortedStates[i].price;
+    }
+  }
+  return sortedStates[0]?.price ?? currentPrice;
+}
+
 /**
  * Get the primary name registered to an address
  */
@@ -235,7 +265,7 @@ export async function checkSubscriptionStatus(
     );
 
     // Get the owner's primary name
-    const ownerName = await getPrimaryName(groupOwner);
+    const ownerName = groupData.ownerPrimaryName;
     if (!ownerName) {
       console.log(
         '[checkSubscriptionStatus] Owner has no primary name - subscription likely not enabled'
@@ -546,6 +576,44 @@ export async function checkSubscriptionStatus(
           hasSubscriptionEnabled: true,
           paymentValidationError: `Payment sent to wrong recipient: ${txData?.recipient}`,
         };
+      }
+
+      // Validate amount matches the price that was active at payment time (historical pricing)
+      const paymentTimestamp = txData?.timestamp;
+      if (paymentTimestamp != null) {
+        const currentPrice =
+          typeof subscriptionDetails?.amountQort === 'string'
+            ? parseFloat(subscriptionDetails.amountQort)
+            : Number(subscriptionDetails?.amountQort) || 0;
+        const states = Array.isArray(subscriptionDetails?.states)
+          ? (subscriptionDetails.states as SubscriptionState[])
+          : undefined;
+        const expectedPrice = getPriceAtTime(
+          states,
+          paymentTimestamp,
+          currentPrice
+        );
+        const amountPaid = parseFloat(txData?.amount) ?? 0;
+        if (Math.abs(amountPaid - expectedPrice) > 0.00001) {
+          console.error(
+            '[checkSubscriptionStatus] Payment amount does not match expected price:',
+            amountPaid,
+            'expected',
+            expectedPrice
+          );
+          return {
+            status: 'subscribed-unpaid',
+            isSubscribed: true,
+            needsPayment: true,
+            isOwner: false,
+            isMember: true,
+            hasPaymentRecord: true,
+            paymentTxSignature,
+            isPaymentTxValid: false,
+            hasSubscriptionEnabled: true,
+            paymentValidationError: `Payment amount ${amountPaid} doesn't match expected price ${expectedPrice} (price at time of payment)`,
+          };
+        }
       }
 
       // All validations passed!

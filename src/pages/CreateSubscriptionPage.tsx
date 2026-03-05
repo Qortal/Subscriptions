@@ -30,7 +30,7 @@ import {
   publishSubscription,
   type CreateSubscriptionForm,
 } from '../lib/subscriptionPublishing';
-import { useTestIdentifiers } from '../constants';
+import { useTestIdentifiers, HOURLY_INTERVAL_DAYS, GRACE_20_MIN_DAYS } from '../constants';
 import { cachePendingSubscription } from '../lib/pendingTransactionsCache';
 
 function isValidAmountInput(value: string) {
@@ -109,16 +109,12 @@ export function CreateSubscriptionPage() {
     setGroupId(ids[0]);
   }, [groupId, availableGroups]);
 
-  const [title, setTitle] = useState('My Premium Subscription');
-  const [amountQortInput, setAmountQortInput] = useState('2');
+  const [title, setTitle] = useState('');
+  const [amountQortInput, setAmountQortInput] = useState('10');
   const [intervalDays, setIntervalDays] = useState<number>(30);
   const [graceDays, setGraceDays] = useState<number>(3);
-  const [description, setDescription] = useState(
-    'Describe your subscription: what it is, who it is for, and how subscribers benefit.'
-  );
-  const [perksText, setPerksText] = useState(
-    'Weekly updates\nPrivate group access\nBonus posts'
-  );
+  const [description, setDescription] = useState('');
+  const [perksText, setPerksText] = useState('');
 
   const amountQort = useMemo(() => {
     const trimmed = amountQortInput.trim();
@@ -186,14 +182,23 @@ export function CreateSubscriptionPage() {
 
   const steps = ['Choose group', 'Pricing rules', 'Details & publish'];
 
-  const graceOptions = [3, 5, 7] as const;
+  const graceOptions = [GRACE_20_MIN_DAYS, 3, 5, 7] as const;
+
+  const isPriceValid =
+    amountQortInput.trim() !== '' &&
+    (() => {
+      const n = Number(amountQortInput.trim());
+      return Number.isFinite(n) && n > 0;
+    })();
 
   const canContinue =
     !!group &&
-    title.trim().length > 0 &&
-    amountQortInput.trim().length > 0 &&
-    amountQort >= 1 &&
-    graceOptions.includes(graceDays as (typeof graceOptions)[number]);
+    (activeStep === 0 ||
+      (isPriceValid &&
+        amountQort >= 1 &&
+        graceOptions.includes(graceDays as (typeof graceOptions)[number]) &&
+        (activeStep < steps.length - 1 ||
+          (title.trim().length > 0 && description.trim().length > 0))));
 
   async function handlePublish() {
     if (!form || !fullDetails || !form.subscriptionId) return;
@@ -315,7 +320,7 @@ export function CreateSubscriptionPage() {
       availableGroups.length === 0 ? (
         <Alert severity="info">
           All your owned private groups already have subscriptions. You can
-          manage them from the "Managed subscriptions" tab on the home page.
+          manage them from the "Subscription I manage" tab on the home page.
         </Alert>
       ) : null}
 
@@ -392,7 +397,6 @@ export function CreateSubscriptionPage() {
                     }
                   }}
                   onBlur={() => {
-                    // normalize/clamp on blur
                     setAmountQortInput(String(amountQort));
                   }}
                   helperText="Min 1 QORT, up to 2 decimals"
@@ -407,6 +411,7 @@ export function CreateSubscriptionPage() {
                     value={intervalDays}
                     onChange={(e) => setIntervalDays(Number(e.target.value))}
                   >
+                    <MenuItem value={HOURLY_INTERVAL_DAYS}>Hourly (for testing)</MenuItem>
                     <MenuItem value={1}>Daily (1 day)</MenuItem>
                     <MenuItem value={30}>Monthly (30 days)</MenuItem>
                   </Select>
@@ -415,14 +420,15 @@ export function CreateSubscriptionPage() {
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <FormControl fullWidth>
-                  <InputLabel id="grace-label">Grace Period (days)</InputLabel>
+                  <InputLabel id="grace-label">Grace Period</InputLabel>
                   <Select
                     labelId="grace-label"
-                    label="Grace Period (days)"
+                    label="Grace Period"
                     value={graceDays}
                     onChange={(e) => setGraceDays(Number(e.target.value))}
                   >
-                    {graceOptions.map((d) => (
+                    <MenuItem value={GRACE_20_MIN_DAYS}>20 min (for testing)</MenuItem>
+                    {[3, 5, 7].map((d) => (
                       <MenuItem key={d} value={d}>
                         {d} days
                       </MenuItem>
@@ -432,8 +438,17 @@ export function CreateSubscriptionPage() {
               </Stack>
 
               <Alert severity="info">
-                Subscription with {intervalDays === 1 ? 'daily' : 'monthly'}{' '}
-                billing and a {graceDays}-day grace period after payment is due.
+                Subscription with{' '}
+                {intervalDays === HOURLY_INTERVAL_DAYS
+                  ? 'hourly'
+                  : intervalDays === 1
+                    ? 'daily'
+                    : 'monthly'}{' '}
+                billing and a{' '}
+                {graceDays < 0.1
+                  ? '20-min'
+                  : `${graceDays}-day`}{' '}
+                grace period after payment is due.
               </Alert>
             </Stack>
           ) : null}

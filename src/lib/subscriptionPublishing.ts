@@ -66,6 +66,30 @@ export function encodeOnChainIndexData(index: SubscriptionOnChainIndex) {
   return `qsub1|${index.gid}|${index.amt}|${index.int}|${index.gr}`;
 }
 
+/** Parse on-chain index data string (qsub1|gid|amt|int|gr) to get price and interval for display/validation */
+export function parseOnChainIndexData(
+  data: string
+): { priceQort: number; intervalDays: number } | null {
+  if (!data || typeof data !== 'string') return null;
+  const decoded =
+    data.length > 0 && !data.includes('|')
+      ? (() => {
+          try {
+            return atob(data);
+          } catch {
+            return data;
+          }
+        })()
+      : data;
+  const parts = decoded.trim().split('|');
+  if (parts.length < 5 || parts[0] !== 'qsub1') return null;
+  const amt = parseFloat(parts[2]);
+  let intervalDays = parseFloat(parts[3]);
+  if (Number.isNaN(amt) || Number.isNaN(intervalDays) || intervalDays < 0) return null;
+  if (intervalDays === 0) intervalDays = 1 / 24; // 0 stored for hourly
+  return { priceQort: amt, intervalDays };
+}
+
 export function assertOnChainDataLimit(data: string, limitBytes = 239) {
   const bytes = new TextEncoder().encode(data).length;
   if (bytes > limitBytes) {
@@ -103,7 +127,8 @@ export function buildFullDetails(
   // Convert intervalDays to interval enum
   const getIntervalFromDays = (
     days: number
-  ): 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' => {
+  ): 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' => {
+    if (days < 1) return 'HOUR';
     if (days === 1) return 'DAY';
     if (days === 7) return 'WEEK';
     if (days >= 365) return 'YEAR';
@@ -175,7 +200,8 @@ export function buildUpdatedDetails(
   // Convert intervalDays to interval enum
   const getIntervalFromDays = (
     days: number
-  ): 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' => {
+  ): 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' => {
+    if (days < 1) return 'HOUR';
     if (days === 1) return 'DAY';
     if (days === 7) return 'WEEK';
     if (days >= 365) return 'YEAR';

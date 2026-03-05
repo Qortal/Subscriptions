@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 export type GroupMember = {
   member: string;
+  primaryName?: string | null;
   joined: number;
   isAdmin?: boolean;
 };
@@ -35,9 +36,15 @@ export function useGroupMembers(groupId: number | null, limit: number = 100, ref
         }
 
         const data: GroupMembersResponse = await res.json();
+        const rawMembers = data.members || [];
 
         if (!cancelled) {
-          setMembers(data.members || []);
+          setMembers(
+            rawMembers.map((m: GroupMember & { name?: string }) => ({
+              ...m,
+              primaryName: m.primaryName ?? m.name ?? null,
+            }))
+          );
           setMemberCount(data.memberCount || 0);
         }
       } catch (e: any) {

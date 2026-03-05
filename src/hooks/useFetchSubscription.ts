@@ -7,18 +7,11 @@ import { getPendingSubscription } from '../lib/pendingTransactionsCache';
 
 function intervalDaysToBillingInterval(
   intervalDays: number
-): 'daily' | 'monthly' | 'yearly' {
+): 'hourly' | 'daily' | 'monthly' | 'yearly' {
+  if (intervalDays < 0.1) return 'hourly';
   if (intervalDays === 1) return 'daily';
   if (intervalDays >= 365) return 'yearly';
   return 'monthly';
-}
-
-async function fetchPrimaryNameForAddress(ownerAddress: string) {
-  const response = await fetch(`/names/primary/${ownerAddress}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  const name = data?.name;
-  return typeof name === 'string' && name.trim() ? name : null;
 }
 
 /**
@@ -71,7 +64,7 @@ export function useFetchSubscription(
         }
 
         // Get owner's primary name
-        const ownerName = await fetchPrimaryNameForAddress(ownerAddress);
+        const ownerName = groupData.ownerPrimaryName;
         if (!ownerName) {
           throw new Error('Owner primary name not found');
         }

@@ -31,11 +31,38 @@ import { useGroupInfo } from '../hooks/useGroupInfo';
 import { useFetchSubscription } from '../hooks/useFetchSubscription';
 import { useValidateUserInGroupKeys } from '../hooks/useValidateUserInGroupKeys';
 import { useJoinRequestGroups } from '../hooks/useJoinRequestGroups';
+import { useSubscriptionBillingDetails } from '../hooks/useSubscriptionBillingDetails';
+import { useSubscriptionIndexPrice } from '../hooks/useSubscriptionIndexPrice';
+import {
+  useSubscriberPaymentStatus,
+  getPriceAtTime,
+} from '../hooks/useSubscriberPaymentStatus';
 import {
   cachePendingSubscribeAction,
   updatePendingSubscribeAction,
 } from '../lib/pendingTransactionsCache';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+
+function formatExpiry(expiresAt: number): {
+  dateText: string;
+  timeLeft: string;
+} {
+  const d = new Date(expiresAt);
+  const dateText = d.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  const now = Date.now();
+  if (expiresAt <= now) return { dateText, timeLeft: 'Expired' };
+  const ms = expiresAt - now;
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+  const timeLeft =
+    days > 0
+      ? `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''} left`
+      : hours >= 1
+        ? `${hours} hour${hours !== 1 ? 's' : ''} left`
+        : `${minutes} min${minutes !== 1 ? 's' : ''} left`;
+  return { dateText, timeLeft };
+}
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
@@ -75,7 +102,7 @@ export function SubscriptionPage() {
 
   // Use catalog item if available, otherwise use fetched subscription
   const item = catalogItem || fetchedSubscription;
-
+  console.log('item', item);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
@@ -92,6 +119,7 @@ export function SubscriptionPage() {
     isSubscribed,
     needsPayment,
     isOwner,
+    existingSubscriptionIndexIdentifier,
   } = useCheckSubscriptionStatus(
     item?.groupId ?? null,
     item?.detailsIdentifier ?? null,
@@ -110,13 +138,108 @@ export function SubscriptionPage() {
   const userIsSubscribed = isSubscribed || justSubscribed;
   const userNeedsPayment = needsPayment && !justSubscribed;
 
-  // Check if subscription is disabled
-  const isDisabled = item && (item as any).status === 'disabled';
+  // Billing details (interval, grace, status) - fetch whenever we have an item so we get status for isDisabled
+  const { details: billingDetails } = useSubscriptionBillingDetails(
+    item?.ownerName ?? null,
+    item?.detailsIdentifier ?? null,
+    !!item
+  );
+
+  // Locked-in price/interval from subscriber's PRODUCT record (si) → index DOCUMENT
+  const { priceQort: indexPriceQort, intervalDays: indexIntervalDays } =
+    useSubscriptionIndexPrice(
+      item?.ownerName ?? null,
+      existingSubscriptionIndexIdentifier,
+      !!(
+        item &&
+        userIsSubscribed &&
+        !isOwner &&
+        existingSubscriptionIndexIdentifier
+      )
+    );
+
+  // Check if subscription is disabled (from fetched details; item from catalog/fetch doesn't include status)
+  const isDisabled = item && billingDetails?.status === 'disabled';
 
   // Check if user is in group encryption keys (only if subscribed and paid)
   const shouldCheckGroupKeys = userIsSubscribed && !userNeedsPayment;
   const { isInGroupKeys, isLoading: checkingGroupKeys } =
     useValidateUserInGroupKeys(shouldCheckGroupKeys ? (item?.groupId ?? 0) : 0);
+
+  // Current user's payment/expiry (only when subscribed and paid)
+  const { paymentInfo } = useSubscriberPaymentStatus(
+    auth?.address
+      ? [{ address: auth.address, primaryName: auth.name ?? null }]
+      : [],
+    item?.detailsIdentifier ?? null,
+    item?.ownerAddress ?? null,
+    item?.ownerName ?? null,
+    item?.priceQort ?? 0,
+    billingDetails?.states,
+    billingDetails?.intervalDays ?? 30,
+    billingDetails?.graceDays ?? 3,
+    !!(
+      item &&
+      userIsSubscribed &&
+      !userNeedsPayment &&
+      auth?.address &&
+      !isOwner
+    )
+  );
+
+  const currentUserInfo = auth?.address
+    ? paymentInfo.get(auth.address)
+    : undefined;
+  const currentUserExpiresAt = currentUserInfo?.expiresAt;
+  const expiryDisplay =
+    currentUserExpiresAt != null ? formatExpiry(currentUserExpiresAt) : null;
+
+  // Expired = paid period has ended (excludes grace). Show renew CTA when the expiry date has passed.
+  const isExpired = expiryDisplay?.timeLeft === 'Expired';
+  const showRenewCta = userNeedsPayment || (userIsSubscribed && isExpired);
+
+  // Calculate the locked renewal price:
+  // Prefer price from index (si) when available; else from states + lastPaymentDate
+  const renewalPrice = useMemo(() => {
+    const currentPrice = item?.priceQort ?? 0;
+    if (indexPriceQort != null) {
+      return Math.min(indexPriceQort, currentPrice);
+    }
+    const lastPaymentDate = currentUserInfo?.lastPaymentDate;
+    if (!lastPaymentDate || !billingDetails?.states) {
+      return currentPrice;
+    }
+    const priceAtSubscription = getPriceAtTime(
+      billingDetails.states,
+      lastPaymentDate,
+      currentPrice
+    );
+    return Math.min(priceAtSubscription, currentPrice);
+  }, [
+    indexPriceQort,
+    currentUserInfo?.lastPaymentDate,
+    billingDetails?.states,
+    item?.priceQort,
+  ]);
+
+  // For subscribed users: show locked-in price/interval from index (si) when available
+  const displayPrice =
+    userIsSubscribed && !isOwner && indexPriceQort != null
+      ? Math.min(indexPriceQort, item?.priceQort ?? indexPriceQort)
+      : userIsSubscribed && !isOwner && renewalPrice !== item?.priceQort
+        ? renewalPrice
+        : (item?.priceQort ?? 0);
+  const displayIntervalDays =
+    userIsSubscribed && !isOwner && indexIntervalDays != null
+      ? indexIntervalDays
+      : (billingDetails?.intervalDays ?? 30);
+  const displayIntervalLabel = useMemo(() => {
+    const days = displayIntervalDays;
+    if (days < 0.1) return 'hour';
+    if (days === 1) return 'day';
+    if (days >= 365) return 'year';
+    return 'month';
+  }, [displayIntervalDays]);
 
   const handleOpenSubscribeModal = () => {
     if (!auth?.name || !auth?.address) {
@@ -127,7 +250,7 @@ export function SubscriptionPage() {
     // Check if subscription is disabled
     if (isDisabled) {
       setSnackbarMsg(
-        'This subscription is currently not accepting new members'
+        'This subscription is currently not accepting new subscribers nor payments.'
       );
       setSnackbarOpen(true);
       return;
@@ -144,8 +267,9 @@ export function SubscriptionPage() {
       setSnackbarOpen(true);
       return;
     }
-    // Allow opening modal if not subscribed OR if subscribed but needs payment
-    if (userIsSubscribed && !userNeedsPayment) {
+    // Allow opening modal if not subscribed, or needs payment, or expired (renewal)
+    const isExpiredForModal = expiryDisplay?.timeLeft === 'Expired';
+    if (userIsSubscribed && !userNeedsPayment && !isExpiredForModal) {
       setSnackbarMsg('You are already subscribed!');
       setSnackbarOpen(true);
       return;
@@ -158,9 +282,12 @@ export function SubscriptionPage() {
       throw new Error('Subscription not found or user not authenticated');
     }
 
+    // Use locked renewal price (original agreed price, unless current price is lower)
+    const amountToPay = showRenewCta ? renewalPrice : item.priceQort;
+
     const signature = await sendSubscriptionPayment(
       item.ownerAddress,
-      item.priceQort
+      amountToPay
     );
 
     // Cache the pending subscribe action with payment signature
@@ -199,11 +326,22 @@ export function SubscriptionPage() {
       throw new Error('Missing required data');
     }
 
+    // Use locked-in index only when they paid the locked-in price (renewal and renewalPrice < current).
+    // When they paid current price (e.g. because it dropped), use latest index.
+    const payingLockedInPrice =
+      showRenewCta &&
+      item.priceQort != null &&
+      renewalPrice < item.priceQort &&
+      !!existingSubscriptionIndexIdentifier;
+    const indexToPublish = payingLockedInPrice
+      ? existingSubscriptionIndexIdentifier!
+      : item.indexIdentifier;
+
     await publishSubscriptionRecord({
       subscriberName: auth.name,
       subscriberAddress: auth.address,
       detailsIdentifier: item.detailsIdentifier,
-      subscriptionIndexIdentifier: item.indexIdentifier,
+      subscriptionIndexIdentifier: indexToPublish,
       paymentTxSignature: paymentSignature,
       publishMultipleResources,
     });
@@ -306,14 +444,8 @@ export function SubscriptionPage() {
               color="primary"
             />
           )}
-          <Chip
-            label={`Group ID: ${item.groupId}`}
-            variant="outlined"
-            size="small"
-          />
-          {groupLoading && (
-            <Chip label="Loading group..." variant="outlined" size="small" />
-          )}
+          <Chip label={`Group ID: ${item.groupId}`} variant="outlined" />
+          {groupLoading && <Chip label="Loading group..." variant="outlined" />}
         </Stack>
       </Stack>
 
@@ -355,16 +487,31 @@ export function SubscriptionPage() {
                 <Divider />
 
                 <Typography variant="h5" fontWeight={900}>
-                  {item.priceQort} QORT{' '}
+                  {displayPrice} QORT{' '}
                   <Typography component="span" sx={{ opacity: 0.75 }}>
-                    / month
+                    / {displayIntervalLabel}
                   </Typography>
                 </Typography>
+                {userIsSubscribed &&
+                  !isOwner &&
+                  (indexPriceQort != null || renewalPrice !== item.priceQort) &&
+                  (indexPriceQort != null
+                    ? indexPriceQort < (item?.priceQort ?? 0)
+                    : renewalPrice !== item.priceQort) && (
+                    <Typography
+                      variant="caption"
+                      sx={{ opacity: 0.6, fontStyle: 'italic' }}
+                    >
+                      Your rate is locked at {displayPrice} QORT. The current
+                      price for new subscribers is {item.priceQort} QORT.
+                    </Typography>
+                  )}
 
                 {isDisabled ? (
                   <Alert severity="info">
                     <Typography variant="body2" fontWeight={600}>
-                      This subscription is currently not accepting new members
+                      This subscription is currently not accepting new
+                      subscribers nor payments.
                     </Typography>
                   </Alert>
                 ) : hasPendingJoinRequest ? (
@@ -385,16 +532,41 @@ export function SubscriptionPage() {
                   >
                     👤 You Own This Group
                   </Button>
-                ) : userIsSubscribed && !userNeedsPayment ? (
-                  <Button
-                    size="large"
-                    variant="outlined"
-                    disabled
-                    sx={{ color: 'success.main', borderColor: 'success.main' }}
-                  >
-                    ✓ Already Subscribed
-                  </Button>
-                ) : userNeedsPayment ? (
+                ) : userIsSubscribed && !userNeedsPayment && !isExpired ? (
+                  <Stack spacing={1}>
+                    <Button
+                      size="large"
+                      variant="outlined"
+                      disabled
+                      sx={{
+                        color: 'success.main',
+                        borderColor: 'success.main',
+                      }}
+                    >
+                      ✓ Already Subscribed
+                    </Button>
+                    {expiryDisplay && (
+                      <Box sx={{ pt: 0.5 }}>
+                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                          Expires: {expiryDisplay.dateText}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            opacity: 0.85,
+                            fontWeight: 600,
+                            color:
+                              expiryDisplay.timeLeft === 'Expired'
+                                ? 'error.main'
+                                : 'text.secondary',
+                          }}
+                        >
+                          {expiryDisplay.timeLeft}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+                ) : showRenewCta ? (
                   <Button
                     size="large"
                     variant="contained"
@@ -404,7 +576,9 @@ export function SubscriptionPage() {
                   >
                     {checkingSubscription
                       ? 'Checking...'
-                      : '⚠ Payment Required'}
+                      : isExpired
+                        ? 'Pay subscription'
+                        : '⚠ Payment Required'}
                   </Button>
                 ) : (
                   <Button
@@ -474,13 +648,13 @@ export function SubscriptionPage() {
         open={subscribeModalOpen}
         onClose={() => setSubscribeModalOpen(false)}
         subscriptionTitle={item.title}
-        amount={item.priceQort}
+        amount={showRenewCta ? renewalPrice : item.priceQort}
         groupId={item.groupId}
         onPayment={handlePayment}
         onJoinGroup={handleJoinGroup}
         onPublish={handlePublish}
         onComplete={handleSubscribeComplete}
-        isRenewal={userNeedsPayment}
+        isRenewal={showRenewCta}
       />
 
       <Snackbar

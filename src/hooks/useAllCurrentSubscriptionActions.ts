@@ -1,93 +1,106 @@
 import { useEffect, useState } from 'react';
-import { useGlobal } from 'qapp-core';
+import { useGlobal, usePublish } from 'qapp-core';
 import { buildSubscriptionIdentifiers } from '../lib/subscriptionPublishing';
+import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
+import type { BillingInterval } from '../types/subscription';
+
+/** Normalize PRODUCT record so we have { si?, tx } even when API returns base64 or wrapper */
+function parseProductRecordData(raw: any): { si?: string; tx: string } | null {
+  if (!raw) return null;
+  if (typeof raw.tx === 'string') {
+    return { si: typeof raw.si === 'string' ? raw.si : undefined, tx: raw.tx };
+  }
+  const b64 = raw.data ?? raw.resource?.data;
+  if (typeof b64 === 'string') {
+    try {
+      const decoded = JSON.parse(atob(b64)) as { si?: string; tx?: string };
+      if (decoded && typeof decoded.tx === 'string') {
+        return {
+          si: typeof decoded.si === 'string' ? decoded.si : undefined,
+          tx: decoded.tx,
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
 
 export type CurrentSubscriptionActions = {
   totalNeedingPayment: number;
   totalActions: number;
   subscriptionsWithActions: string[];
+  /** Locked-in price/interval from subscriber's PRODUCT (si) for display on cards */
+  subscriptionDisplayOverrides: Record<
+    string,
+    { priceQort: number; billingInterval: BillingInterval }
+  >;
+  /** Next due (subscription end) timestamp in ms for "X mins/hours/days left" */
+  subscriptionExpiresAt: Record<string, number>;
 };
+
+function intervalDaysToBillingInterval(intervalDays: number): BillingInterval {
+  if (intervalDays < 0.1) return 'hourly';
+  if (intervalDays === 1) return 'daily';
+  if (intervalDays >= 365) return 'yearly';
+  return 'monthly';
+}
 
 export type SubscriptionState = {
   version: number;
   price: number;
-  interval: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+  interval: 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
   effectiveFrom: number;
 };
 
-/**
- * Get the price that was active at a given timestamp
- */
 function getPriceAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentPrice: number
 ): number {
-  if (!states || states.length === 0) {
-    return currentPrice;
+  if (!states || states.length === 0) return currentPrice;
+  const sorted = [...states].sort((a, b) => a.effectiveFrom - b.effectiveFrom);
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].effectiveFrom <= timestamp) return sorted[i].price;
   }
-
-  const sortedStates = [...states].sort(
-    (a, b) => a.effectiveFrom - b.effectiveFrom
-  );
-
-  for (let i = sortedStates.length - 1; i >= 0; i--) {
-    if (sortedStates[i].effectiveFrom <= timestamp) {
-      return sortedStates[i].price;
-    }
-  }
-
-  return sortedStates[0]?.price ?? currentPrice;
+  return sorted[0]?.price ?? currentPrice;
 }
 
-/**
- * Get the interval (in days) that was active at a given timestamp
- */
 function getIntervalDaysAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentIntervalDays: number
 ): number {
-  if (!states || states.length === 0) {
-    return currentIntervalDays;
-  }
-
-  const sortedStates = [...states].sort(
-    (a, b) => a.effectiveFrom - b.effectiveFrom
-  );
-
-  for (let i = sortedStates.length - 1; i >= 0; i--) {
-    if (sortedStates[i].effectiveFrom <= timestamp) {
-      const interval = sortedStates[i].interval;
-      switch (interval) {
-        case 'DAY':
-          return 1;
-        case 'WEEK':
-          return 7;
-        case 'MONTH':
-          return 30;
-        case 'YEAR':
-          return 365;
-        default:
-          return currentIntervalDays;
-      }
+  if (!states || states.length === 0) return currentIntervalDays;
+  const sorted = [...states].sort((a, b) => a.effectiveFrom - b.effectiveFrom);
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].effectiveFrom <= timestamp) {
+      const interval = sorted[i].interval;
+      if (interval === 'HOUR') return 1 / 24;
+      if (interval === 'DAY') return 1;
+      if (interval === 'WEEK') return 7;
+      if (interval === 'YEAR') return 365;
+      return 30;
     }
   }
-
   return currentIntervalDays;
 }
 
 /**
- * Hook to check if any current subscriptions need payment
- * Does NOT consider grace period as acceptable - users should pay even if in grace
+ * Hook to check if any current subscriptions need payment.
+ * Validates payment amount and period; uses index (si) from PRODUCT for expected price/interval when present.
  */
 export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
   const { auth, identifierOperations, lists } = useGlobal();
+  const { fetchPublish } = usePublish(3, 'JSON');
   const [aggregatedActions, setAggregatedActions] =
     useState<CurrentSubscriptionActions>({
       totalNeedingPayment: 0,
       totalActions: 0,
       subscriptionsWithActions: [],
+      subscriptionDisplayOverrides: {},
+      subscriptionExpiresAt: {},
     });
 
   const [loading, setLoading] = useState(false);
@@ -104,6 +117,8 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
         totalNeedingPayment: 0,
         totalActions: 0,
         subscriptionsWithActions: [],
+        subscriptionDisplayOverrides: {},
+        subscriptionExpiresAt: {},
       });
       setLoading(false);
       return;
@@ -120,152 +135,149 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
             if (!subscriptionId) return null;
 
             try {
-              // Get the details identifier for payment checking
               const { detailsIdentifier } = await buildSubscriptionIdentifiers(
                 identifierOperations!,
                 subscriptionId
               );
 
-              // Fetch the subscription details to get pricing info
-              const detailsRes = await lists!.fetchResourcesResultsOnly({
-                identifier: detailsIdentifier,
-                service: 'DOCUMENT',
+              const detailsRes = await fetchPublish({
                 name: subscription.ownerName,
-                exactMatchNames: true,
-                limit: 1,
+                service: 'DOCUMENT',
+                identifier: detailsIdentifier,
               });
+              console.log('detailsRes', detailsRes);
+              const details = detailsRes?.resource?.data as any;
+              if (!details) return null;
 
-              if (!detailsRes || detailsRes.length === 0) return null;
+              const states = Array.isArray(details?.states)
+                ? details.states
+                : [];
+              const intervalDaysFromDetails = details?.intervalDays;
 
-              const details = detailsRes[0] as any;
-              const states = details?.states || [];
-              if (states.length === 0) return null;
+              let currentPrice = subscription.priceQort ?? 0;
+              let currentIntervalDays = intervalDaysFromDetails;
+              if (states.length > 0) {
+                const last = states[states.length - 1];
+                currentPrice = last.price ?? currentPrice;
+                currentIntervalDays =
+                  last.interval === 'HOUR'
+                    ? 1 / 24
+                    : last.interval === 'DAY'
+                      ? 1
+                      : last.interval === 'WEEK'
+                        ? 7
+                        : last.interval === 'YEAR'
+                          ? 365
+                          : 30;
+              }
 
-              // Get current pricing state (used as fallback)
-              const currentState = states[states.length - 1];
-              const currentPrice = currentState.price || 0;
-              const currentIntervalDays =
-                currentState.interval === 'DAY'
-                  ? 1
-                  : currentState.interval === 'WEEK'
-                    ? 7
-                    : currentState.interval === 'YEAR'
-                      ? 365
-                      : 30;
-
-              // Check for payment records (PRODUCT)
               const paymentRecords = await lists!.fetchResourcesResultsOnly({
                 identifier: detailsIdentifier,
                 service: 'PRODUCT',
                 name: auth!.name || undefined,
                 exactMatchNames: true,
-                limit: 50, // Get recent payments
+                reverse: true,
+                prefix: true,
+                limit: 1,
               });
+              console.log('paymentRecords', paymentRecords);
+              let needsPayment = true;
+              let displayOverride: {
+                priceQort: number;
+                billingInterval: BillingInterval;
+              } | null = null;
+              let expiresAt: number | undefined;
 
-              // Calculate if payment is needed
-              let needsPayment = false;
-
-              if (!paymentRecords || paymentRecords.length === 0) {
-                // No payment records at all
-                needsPayment = true;
-              } else {
-                // Check each payment record with historical pricing
-                let hasValidPayment = false;
-
-                // Sort by most recent first
-                const sortedPayments = [...paymentRecords].sort(
-                  (a: any, b: any) => (b.created || 0) - (a.created || 0)
-                );
-
-                for (const record of sortedPayments) {
-                  const paymentTimestamp = (record as any).created;
-                  // Payment records from PRODUCT service contain transaction data
-                  // We need to fetch the actual data from the record
-                  let recordData: any = null;
-
-                  try {
-                    // The record might have data already, or we need to fetch it
-                    if ((record as any).data) {
-                      recordData = (record as any).data;
-                    } else if ((record as any).identifier) {
-                      // Fetch the data if not included
-                      const dataResponse = await fetch(
-                        `/arbitrary/PRODUCT/${auth!.name}/${(record as any).identifier}`
-                      );
-                      if (dataResponse.ok) {
-                        recordData = await dataResponse.json();
-                      }
-                    }
-                  } catch (error) {
-                    console.error('Error fetching payment record data:', error);
-                    continue;
-                  }
-
-                  if (!recordData || !recordData.tx) {
-                    continue;
-                  }
-
-                  // Fetch the actual transaction to get amount and timestamp
-                  try {
-                    const txResponse = await fetch(
-                      `/transactions/signature/${recordData.tx}`
+              if (paymentRecords && paymentRecords.length > 0) {
+                const record = paymentRecords[0];
+                let recordData: any = null;
+                try {
+                  if ((record as any).data) {
+                    recordData = (record as any).data;
+                  } else if ((record as any).identifier) {
+                    const dataResponse = await fetch(
+                      `/arbitrary/PRODUCT/${auth!.name}/${(record as any).identifier}`
                     );
-
-                    if (!txResponse.ok) {
-                      continue;
-                    }
-
-                    const txData = await txResponse.json();
-                    const actualPaymentTimestamp =
-                      txData?.timestamp || paymentTimestamp;
-                    const amountPaid = parseFloat(txData?.amount || '0');
-
-                    if (!actualPaymentTimestamp || amountPaid <= 0) {
-                      continue;
-                    }
-
-                    // Get the price that was active when they paid
-                    const expectedPrice = getPriceAtTime(
-                      states,
-                      actualPaymentTimestamp,
-                      currentPrice
-                    );
-
-                    // Check if payment amount matches the historical price
-                    if (amountPaid >= expectedPrice - 0.00001) {
-                      // Valid payment found - check if it's still current
-                      const intervalDaysAtPayment = getIntervalDaysAtTime(
-                        states,
-                        actualPaymentTimestamp,
-                        currentIntervalDays
-                      );
-
-                      const now = Date.now();
-                      const daysSincePayment =
-                        (now - actualPaymentTimestamp) / (1000 * 60 * 60 * 24);
-
-                      // Payment is valid if we're still within the interval
-                      // Note: Does NOT consider grace period (per hook design)
-                      if (daysSincePayment <= intervalDaysAtPayment) {
-                        hasValidPayment = true;
-                        break;
-                      }
-                    }
-                  } catch (error) {
-                    console.error(
-                      'Error validating payment transaction:',
-                      error
-                    );
-                    continue;
+                    if (dataResponse.ok) recordData = await dataResponse.json();
                   }
+                } catch (error) {
+                  console.error('Error fetching payment record data:', error);
+                  // TODO: Handle error
                 }
 
-                needsPayment = !hasValidPayment;
+                const parsed = parseProductRecordData(recordData);
+                console.log('parsed', parsed);
+                if (parsed) recordData = parsed;
+                if (!recordData || !recordData.tx) needsPayment = true;
+
+                try {
+                  const txResponse = await fetch(
+                    `/transactions/signature/${recordData.tx}`
+                  );
+                  if (!txResponse.ok) needsPayment = true;
+
+                  const txData = await txResponse.json();
+                  const paymentTs = txData?.timestamp;
+                  const amountPaid = parseFloat(txData?.amount || '0');
+                  if (paymentTs == null || amountPaid <= 0) needsPayment = true;
+                  console.log('paymentTs', paymentTs, amountPaid);
+                  let expectedPrice: number;
+                  let intervalDaysAtPayment: number;
+
+                  if (
+                    recordData.si &&
+                    typeof recordData.si === 'string' &&
+                    subscription.ownerName
+                  ) {
+                    const indexData = await fetchSubscriptionIndexPrice(
+                      subscription.ownerName,
+                      recordData.si
+                    );
+                    console.log('indexData', indexData);
+                    if (indexData) {
+                      expectedPrice = indexData.priceQort;
+                      intervalDaysAtPayment = indexData.intervalDays;
+                      if (!displayOverride) {
+                        displayOverride = {
+                          priceQort: indexData.priceQort,
+                          billingInterval: intervalDaysToBillingInterval(
+                            indexData.intervalDays
+                          ),
+                        };
+                      }
+                    } else {
+                      // TODO: Handle error
+                      return;
+                    }
+                  } else {
+                    // TODO: Handle error
+                    return;
+                  }
+                  console.log(
+                    'expectedPrice',
+                    expectedPrice,
+                    intervalDaysAtPayment
+                  );
+                  if (amountPaid < expectedPrice - 0.00001) needsPayment = true;
+
+                  const subscriptionEndsAt =
+                    paymentTs + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+                  expiresAt = subscriptionEndsAt;
+                  const now = Date.now();
+
+                  if (now <= subscriptionEndsAt) {
+                    needsPayment = false;
+                  }
+                } catch (error) {
+                  console.error('Error validating payment transaction:', error);
+                }
               }
 
               return {
                 subscriptionId,
                 needsPayment,
+                displayOverride,
+                expiresAt,
               };
             } catch (error) {
               console.error(
@@ -280,11 +292,24 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
         if (!cancelled) {
           let totalNeedingPayment = 0;
           const subscriptionsNeedingPayment: string[] = [];
+          const subscriptionDisplayOverrides: Record<
+            string,
+            { priceQort: number; billingInterval: BillingInterval }
+          > = {};
+          const subscriptionExpiresAt: Record<string, number> = {};
 
           results.forEach((result) => {
-            if (result && result.needsPayment) {
+            if (!result) return;
+            if (result.needsPayment) {
               totalNeedingPayment += 1;
               subscriptionsNeedingPayment.push(result.subscriptionId);
+            }
+            if (result.displayOverride) {
+              subscriptionDisplayOverrides[result.subscriptionId] =
+                result.displayOverride;
+            }
+            if (result.expiresAt != null) {
+              subscriptionExpiresAt[result.subscriptionId] = result.expiresAt;
             }
           });
 
@@ -292,6 +317,8 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
             totalNeedingPayment,
             totalActions: totalNeedingPayment,
             subscriptionsWithActions: subscriptionsNeedingPayment,
+            subscriptionDisplayOverrides,
+            subscriptionExpiresAt,
           });
           setLoading(false);
         }
@@ -308,7 +335,13 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
     return () => {
       cancelled = true;
     };
-  }, [currentSubscriptions, auth?.name, identifierOperations, lists]);
+  }, [
+    currentSubscriptions,
+    auth?.name,
+    identifierOperations,
+    lists,
+    fetchPublish,
+  ]);
 
   return {
     actions: aggregatedActions,

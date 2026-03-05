@@ -42,17 +42,6 @@ const getPublishesFromAdmins = async (admins: string[], groupId: number) => {
   return sortedData[0];
 };
 
-export async function getNameInfo(address: string) {
-  const response = await fetch(`/names/primary/` + address);
-  const nameData = await response.json();
-
-  if (nameData?.name) {
-    return nameData?.name;
-  } else {
-    return '';
-  }
-}
-
 export const getGroupAdmins = async (groupNumber: number) => {
   const response = await fetch(
     `/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
@@ -64,7 +53,7 @@ export const getGroupAdmins = async (groupNumber: number) => {
 
   const getMemNames = groupData?.members?.map(async (member: any) => {
     if (member?.member) {
-      const name = await getNameInfo(member.member);
+      const name = member.primaryName;
       if (name) {
         members.push(name);
         both.push({ name, address: member.member });
@@ -87,19 +76,20 @@ export const getGroupMembers = async (groupNumber: number) => {
   return groupData;
 };
 
-export const useValidateGroupKeys = (groupId: number, refreshKey: number = 0) => {
+export const useValidateGroupKeys = (
+  groupId: number,
+  refreshKey: number = 0
+) => {
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState<
     number | null
   >(null);
   const [memberCountFromSecretKeyData, setMemberCountFromSecretKeyData] =
     useState<number | null>(null);
-  const [newEncryptionNotification] = useState<
-    any | null
-  >(null);
+  const [newEncryptionNotification] = useState<any | null>(null);
   const [members, setMembers] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Get pending owner actions from cache to check for recent re-encryption
   const pendingOwnerActions = useAtomValue(pendingOwnerActionsAtom);
 
@@ -117,7 +107,7 @@ export const useValidateGroupKeys = (groupId: number, refreshKey: number = 0) =>
           return;
         }
         const publish = await getPublishesFromAdmins(names, groupId);
-        setSecretKeyPublishDate(publish.updated);
+        setSecretKeyPublishDate(publish.updated || publish.created);
         if (publish === false) {
           setTriedToFetchSecretKey(true);
           setIsLoading(false);
@@ -166,12 +156,16 @@ export const useValidateGroupKeys = (groupId: number, refreshKey: number = 0) =>
         action.groupId === groupId &&
         action.expiresAt > Date.now()
     );
-
+    console.log('recentReEncrypt', recentReEncrypt);
     // If there's a recent re-encryption action in cache, don't show alert/button
     if (recentReEncrypt) {
       return false;
     }
-
+    console.log(
+      'triedToFetchSecretKey',
+      triedToFetchSecretKey,
+      secretKeyPublishDate
+    );
     // Re-encryption check based purely on blockchain state (no cache involved)
     if (triedToFetchSecretKey && !secretKeyPublishDate) return true;
     if (
@@ -185,9 +179,12 @@ export const useValidateGroupKeys = (groupId: number, refreshKey: number = 0) =>
 
     if (isDiffMemberNumber) return true;
 
-    const latestJoined = members?.members.reduce((maxJoined: number, current: any) => {
-      return current.joined > maxJoined ? current.joined : maxJoined;
-    }, members?.members[0].joined);
+    const latestJoined = members?.members.reduce(
+      (maxJoined: number, current: any) => {
+        return current.joined > maxJoined ? current.joined : maxJoined;
+      },
+      members?.members[0].joined
+    );
 
     if (secretKeyPublishDate < latestJoined) {
       return true;
