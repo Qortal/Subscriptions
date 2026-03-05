@@ -1,39 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGlobal } from 'qapp-core';
-import type { GroupAccessType, MemberGroup } from '../types/subscription';
+import type { GroupAccessType, GroupApiItem, MemberGroup } from '../types/subscription';
 
-type AnyGroup = Record<string, unknown>;
-
-function coerceAccessType(group: AnyGroup): GroupAccessType | null {
+function coerceAccessType(group: GroupApiItem): GroupAccessType | null {
   // We treat any non-open group as "private" for this app.
   const type = group.type;
   if (type === 1) return 'private';
   return null;
 }
 
-function getGroupId(group: AnyGroup): number | null {
-  const id = group.groupId ?? group.id;
-  if (typeof id === 'number') return id;
-  if (typeof id === 'string' && /^\d+$/.test(id)) return Number(id);
-  return null;
-}
-
-function getGroupName(group: AnyGroup): string {
-  const name = group.groupName ?? group.name ?? group.group;
-  if (typeof name === 'string' && name.trim()) return name;
-  return 'Unnamed group';
-}
-
-function getGroupOwnerAddress(group: AnyGroup): string | null {
-  const owner = group.owner ?? group.ownerAddress;
-  if (typeof owner === 'string' && owner.trim()) return owner;
-  return null;
-}
-
 export function useMemberGroups() {
   const { auth } = useGlobal();
   const [loading, setLoading] = useState(false);
-  const [rawGroups, setRawGroups] = useState<AnyGroup[] | null>(null);
+  const [rawGroups, setRawGroups] = useState<GroupApiItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,8 +46,8 @@ export function useMemberGroups() {
 
         const data = await response.json();
         const groupsArray = Array.isArray(data) ? data : data.groups || [];
-        const privateGroups = (groupsArray as AnyGroup[]).filter(
-          (g) => !(g as any).isOpen
+        const privateGroups = (groupsArray as GroupApiItem[]).filter(
+          (g) => !g.isOpen
         );
         if (!cancelled) setRawGroups(privateGroups);
       } catch (e: any) {
@@ -92,16 +71,14 @@ export function useMemberGroups() {
 
     return rawGroups
       .map((g) => {
-        const id = getGroupId(g);
-        const ownerAddress = getGroupOwnerAddress(g);
-        if (id === null || ownerAddress === null) return null;
         const access = coerceAccessType(g) ?? 'private';
         return {
-          id,
-          name: getGroupName(g),
+          id: g.groupId,
+          name: g.groupName,
           access,
-          ownerAddress,
-          raw: g,
+          ownerAddress: g.owner,
+          ownerPrimaryName: g.ownerPrimaryName ?? null,
+          raw: g as MemberGroup['raw'],
         } satisfies MemberGroup;
       })
       .filter(Boolean) as MemberGroup[];

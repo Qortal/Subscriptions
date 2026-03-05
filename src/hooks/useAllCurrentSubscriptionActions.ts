@@ -54,7 +54,7 @@ export type SubscriptionState = {
   effectiveFrom: number;
 };
 
-function getPriceAtTime(
+function _getPriceAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentPrice: number
@@ -67,7 +67,7 @@ function getPriceAtTime(
   return sorted[0]?.price ?? currentPrice;
 }
 
-function getIntervalDaysAtTime(
+function _getIntervalDaysAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentIntervalDays: number
@@ -86,6 +86,8 @@ function getIntervalDaysAtTime(
   }
   return currentIntervalDays;
 }
+void _getPriceAtTime;
+void _getIntervalDaysAtTime;
 
 /**
  * Hook to check if any current subscriptions need payment.
@@ -140,37 +142,6 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 subscriptionId
               );
 
-              const detailsRes = await fetchPublish({
-                name: subscription.ownerName,
-                service: 'DOCUMENT',
-                identifier: detailsIdentifier,
-              });
-              console.log('detailsRes', detailsRes);
-              const details = detailsRes?.resource?.data as any;
-              if (!details) return null;
-
-              const states = Array.isArray(details?.states)
-                ? details.states
-                : [];
-              const intervalDaysFromDetails = details?.intervalDays;
-
-              let currentPrice = subscription.priceQort ?? 0;
-              let currentIntervalDays = intervalDaysFromDetails;
-              if (states.length > 0) {
-                const last = states[states.length - 1];
-                currentPrice = last.price ?? currentPrice;
-                currentIntervalDays =
-                  last.interval === 'HOUR'
-                    ? 1 / 24
-                    : last.interval === 'DAY'
-                      ? 1
-                      : last.interval === 'WEEK'
-                        ? 7
-                        : last.interval === 'YEAR'
-                          ? 365
-                          : 30;
-              }
-
               const paymentRecords = await lists!.fetchResourcesResultsOnly({
                 identifier: detailsIdentifier,
                 service: 'PRODUCT',
@@ -181,7 +152,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 limit: 1,
               });
               console.log('paymentRecords', paymentRecords);
-              let needsPayment = true;
+              let needsPayment = false;
               let displayOverride: {
                 priceQort: number;
                 billingInterval: BillingInterval;
@@ -256,6 +227,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                   console.log(
                     'expectedPrice',
                     expectedPrice,
+                    amountPaid,
                     intervalDaysAtPayment
                   );
                   if (amountPaid < expectedPrice - 0.00001) needsPayment = true;
@@ -265,8 +237,10 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                   expiresAt = subscriptionEndsAt;
                   const now = Date.now();
 
-                  if (now <= subscriptionEndsAt) {
+                  if (now <= subscriptionEndsAt && !needsPayment) {
                     needsPayment = false;
+                  } else {
+                    needsPayment = true;
                   }
                 } catch (error) {
                   console.error('Error validating payment transaction:', error);

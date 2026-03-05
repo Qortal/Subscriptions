@@ -1,4 +1,4 @@
-export const useTestIdentifiers = true;
+export const useTestIdentifiers = false;
 
 /** Interval in days for hourly billing (used for testing). */
 export const HOURLY_INTERVAL_DAYS = 1 / 24;

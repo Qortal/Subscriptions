@@ -62,7 +62,7 @@ export function getPriceAtTime(
 /**
  * Get the interval (in days) that was active at a given timestamp
  */
-function getIntervalDaysAtTime(
+function _getIntervalDaysAtTime(
   states: SubscriptionState[] | undefined,
   timestamp: number,
   currentIntervalDays: number
@@ -102,6 +102,7 @@ function getIntervalDaysAtTime(
   // If no state found (payment before any state), use current interval
   return currentIntervalDays;
 }
+void _getIntervalDaysAtTime;
 
 /**
  * Hook to check payment status for subscribers
@@ -261,7 +262,7 @@ export function useSubscriberPaymentStatus(
 
                   if (expectedPrice == null) {
                     validationError = 'Could not get price at time of payment';
-                  } else if (+txData?.amount < expectedPrice - 0.00001) {
+                  } else if (+txData?.amount >= expectedPrice - 0.00001) {
                     paymentValid = true;
                   } else {
                     validationError = `Payment amount ${txData?.amount} doesn't match expected price ${expectedPrice} (price at time of payment: ${new Date(paymentTimestamp).toLocaleDateString()})`;
@@ -290,8 +291,7 @@ export function useSubscriberPaymentStatus(
 
             if (paymentValid && paymentTimestamp) {
               const subscriptionEndsAt =
-                paymentTimestamp +
-                intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+                paymentTimestamp + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
               const graceEndsAt =
                 subscriptionEndsAt + graceDays * 24 * 60 * 60 * 1000;
               expiresAt = subscriptionEndsAt;

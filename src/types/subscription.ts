@@ -3,6 +3,22 @@ export type BillingInterval = 'hourly' | 'daily' | 'monthly' | 'yearly';
 // UI wording: "Private groups" (we treat any non-open/closed group as private for this app)
 export type GroupAccessType = 'private';
 
+/** Shape of a group item from the groups API (e.g. /groups/member/:address) */
+export type GroupApiItem = {
+  groupId: number;
+  owner: string;
+  groupName: string;
+  description: string;
+  created: number;
+  isOpen: boolean;
+  approvalThreshold: string;
+  minimumBlockDelay: number;
+  maximumBlockDelay: number;
+  memberCount: number;
+  ownerPrimaryName: string;
+  type?: number; // used for access type coercion in some consumers
+};
+
 export type SubscriptionCatalogItem = {
   id: string;
   title: string;
