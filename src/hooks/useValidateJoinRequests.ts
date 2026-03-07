@@ -22,7 +22,9 @@ export function useValidateJoinRequests(
 
   useEffect(() => {
     if (!detailsIdentifier || addresses.length === 0 || !lists?.fetchResourcesResultsOnly) {
-      setValidations(new Map());
+      if (addresses.length === 0) {
+        setValidations(new Map());
+      }
       setLoading(false);
       return;
     }

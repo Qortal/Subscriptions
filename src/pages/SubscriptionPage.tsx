@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalog } from '../hooks/useCatalog';
 import { useGlobal, usePublish } from 'qapp-core';
@@ -42,6 +42,7 @@ import {
   updatePendingSubscribeAction,
 } from '../lib/pendingTransactionsCache';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+import { resolvePaymentIndexIdentifierForPublish } from '../lib/resolvePaymentIndexIdentifier';
 
 function formatExpiry(expiresAt: number): {
   dateText: string;
@@ -59,19 +60,34 @@ function formatExpiry(expiresAt: number): {
     days > 0
       ? `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''} left`
       : hours >= 1
-        ? `${hours} hour${hours !== 1 ? 's' : ''} left`
+        ? minutes > 0
+          ? `${hours}h ${minutes}m left`
+          : `${hours} hour${hours !== 1 ? 's' : ''} left`
         : `${minutes} min${minutes !== 1 ? 's' : ''} left`;
   return { dateText, timeLeft };
 }
+
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
   const { subscriptionId } = useParams();
   const { catalog } = useCatalog();
-  const { auth } = useGlobal();
+  const { auth, identifierOperations, lists } = useGlobal();
   const { publishMultipleResources } = usePublish();
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const isRefreshingRef = useRef(false);
+
+  // Auto-refresh every 2 minutes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!isRefreshingRef.current) {
+        setRefreshTrigger((prev) => prev + 1);
+      }
+    }, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, []);
 
   // First try to find in catalog
   const catalogItem = useMemo(
@@ -277,13 +293,14 @@ export function SubscriptionPage() {
     setSubscribeModalOpen(true);
   };
 
-  const handlePayment = async (): Promise<string> => {
+  const handlePayment = async (intervalCount: number): Promise<string> => {
     if (!item || !auth?.name || !auth?.address) {
       throw new Error('Subscription not found or user not authenticated');
     }
 
     // Use locked renewal price (original agreed price, unless current price is lower)
-    const amountToPay = showRenewCta ? renewalPrice : item.priceQort;
+    const unitAmount = showRenewCta ? renewalPrice : item.priceQort;
+    const amountToPay = unitAmount * Math.max(1, Math.floor(intervalCount));
 
     const signature = await sendSubscriptionPayment(
       item.ownerAddress,
@@ -326,16 +343,16 @@ export function SubscriptionPage() {
       throw new Error('Missing required data');
     }
 
-    // Use locked-in index only when they paid the locked-in price (renewal and renewalPrice < current).
-    // When they paid current price (e.g. because it dropped), use latest index.
-    const payingLockedInPrice =
-      showRenewCta &&
-      item.priceQort != null &&
-      renewalPrice < item.priceQort &&
-      !!existingSubscriptionIndexIdentifier;
-    const indexToPublish = payingLockedInPrice
-      ? existingSubscriptionIndexIdentifier!
-      : item.indexIdentifier;
+    // Resolve index by the actual paid tx amount to avoid stale/mismatched si.
+    const indexToPublish = await resolvePaymentIndexIdentifierForPublish({
+      ownerName: item.ownerName,
+      subscriptionId: item.id,
+      paymentTxSignature: paymentSignature,
+      lockedIndexIdentifier: existingSubscriptionIndexIdentifier ?? undefined,
+      currentIndexIdentifier: item.indexIdentifier,
+      identifierOperations,
+      lists,
+    });
 
     await publishSubscriptionRecord({
       subscriberName: auth.name,
@@ -359,9 +376,16 @@ export function SubscriptionPage() {
     setJustSubscribed(true);
   };
 
+  // Track loading state to prevent concurrent fetches
+  useEffect(() => {
+    isRefreshingRef.current = checkingSubscription || checkingJoinRequests || checkingGroupKeys;
+  }, [checkingSubscription, checkingJoinRequests, checkingGroupKeys]);
+
   const handleRefresh = () => {
-    setRefreshTrigger((prev) => prev + 1);
-    setJustSubscribed(false);
+    if (!isRefreshingRef.current) {
+      setRefreshTrigger((prev) => prev + 1);
+      setJustSubscribed(false);
+    }
   };
 
   // Show loading state while fetching
@@ -648,7 +672,8 @@ export function SubscriptionPage() {
         open={subscribeModalOpen}
         onClose={() => setSubscribeModalOpen(false)}
         subscriptionTitle={item.title}
-        amount={showRenewCta ? renewalPrice : item.priceQort}
+        unitAmount={showRenewCta ? renewalPrice : item.priceQort}
+        intervalLabel={displayIntervalLabel}
         groupId={item.groupId}
         onPayment={handlePayment}
         onJoinGroup={handleJoinGroup}

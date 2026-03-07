@@ -8,16 +8,37 @@ function formatTimeLeft(expiresAtMs: number): string {
   const now = Date.now();
   const ms = expiresAtMs - now;
   if (ms <= 0) return 'Due';
-  const mins = Math.floor(ms / (60 * 1000));
-  const hours = Math.floor(ms / (60 * 60 * 1000));
-  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
-  const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
-  if (years > 0) return `${years} year${years !== 1 ? 's' : ''} left`;
-  if (months > 0) return `${months} month${months !== 1 ? 's' : ''} left`;
-  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} left`;
-  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} left`;
-  if (mins > 0) return `${mins} min${mins !== 1 ? 's' : ''} left`;
+  const totalMins = Math.floor(ms / (60 * 1000));
+  const totalHours = Math.floor(ms / (60 * 60 * 1000));
+  const totalDays = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const months = Math.floor(totalDays / 30);
+  const years = Math.floor(totalDays / 365);
+
+  if (years > 0) {
+    const remMonths = Math.floor((totalDays - years * 365) / 30);
+    return remMonths > 0
+      ? `${years}y ${remMonths}mo left`
+      : `${years} year${years !== 1 ? 's' : ''} left`;
+  }
+  if (months > 0) {
+    const remDays = totalDays - months * 30;
+    return remDays > 0
+      ? `${months}mo ${remDays}d left`
+      : `${months} month${months !== 1 ? 's' : ''} left`;
+  }
+  if (totalDays > 0) {
+    const remHours = totalHours - totalDays * 24;
+    return remHours > 0
+      ? `${totalDays}d ${remHours}h left`
+      : `${totalDays} day${totalDays !== 1 ? 's' : ''} left`;
+  }
+  if (totalHours > 0) {
+    const remMins = totalMins - totalHours * 60;
+    return remMins > 0
+      ? `${totalHours}h ${remMins}m left`
+      : `${totalHours} hour${totalHours !== 1 ? 's' : ''} left`;
+  }
+  if (totalMins > 0) return `${totalMins} min${totalMins !== 1 ? 's' : ''} left`;
   return 'Due';
 }
 
@@ -47,6 +68,8 @@ function isPending(groupInfo: unknown): boolean {
 export function CurrentSubscriptionCard(props: {
   subscription: MySubscription;
   onView: (id: string) => void;
+  onPayNow?: (id: string) => void;
+  payNowDisabled?: boolean;
   needsPayment?: boolean;
   /** When set, show this (locked-in from PRODUCT si) instead of subscription.priceQort / billingInterval */
   displayPriceQort?: number;
@@ -54,7 +77,16 @@ export function CurrentSubscriptionCard(props: {
   /** When set, show "X mins/hours/days left" instead of nextPaymentDue date */
   expiresAt?: number;
 }) {
-  const { subscription: s, onView, needsPayment, displayPriceQort, displayBillingInterval, expiresAt } = props;
+  const {
+    subscription: s,
+    onView,
+    onPayNow,
+    payNowDisabled,
+    needsPayment,
+    displayPriceQort,
+    displayBillingInterval,
+    expiresAt,
+  } = props;
   const groupName = getGroupName(s.groupInfo);
   const groupId = getGroupId(s.groupInfo);
   const pendingApproval = isPending(s.groupInfo);
@@ -145,6 +177,16 @@ export function CurrentSubscriptionCard(props: {
         </Stack>
       </CardContent>
       <CardActions sx={{ px: 2, pb: 2 }}>
+        {!s.subscriptionDisabled && needsPayment && onPayNow && (
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => onPayNow(s.id)}
+            disabled={payNowDisabled}
+          >
+            Pay now
+          </Button>
+        )}
         <Button variant="contained" onClick={() => onView(s.id)}>
           View subscription
         </Button>

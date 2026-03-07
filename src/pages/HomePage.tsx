@@ -7,7 +7,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -15,7 +14,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
-import { useGlobal } from 'qapp-core';
+import { useGlobal, usePublish } from 'qapp-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { homeTabAtom } from '../state/ui';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
@@ -26,17 +25,45 @@ import { ManagedSubscriptionCardSkeleton } from '../components/ManagedSubscripti
 import { ManagedSubscriptionCard } from '../components/ManagedSubscriptionCard';
 import { useAllManagedSubscriptionActions } from '../hooks/useAllManagedSubscriptionActions';
 import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscriptionActions';
-import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
+import { buildSubscriptionIdentifiers } from '../lib/subscriptionPublishing';
+import { SubscribeModal } from '../components/SubscribeModal';
+import {
+  publishSubscriptionRecord,
+  sendSubscriptionPayment,
+} from '../lib/subscriptionPayment';
+import { cachePendingSubscribeAction } from '../lib/pendingTransactionsCache';
+import { resolvePaymentIndexIdentifierForPublish } from '../lib/resolvePaymentIndexIdentifier';
 
 const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
+type AnyGroup = Record<string, unknown>;
+
+function getGroupId(groupInfo: unknown): number | null {
+  if (!groupInfo || typeof groupInfo !== 'object') return null;
+  const group = groupInfo as AnyGroup;
+  const id = group.groupId || group.id;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'string') return Number(id);
+  return null;
+}
+
+function getOwnerAddress(groupInfo: unknown): string | null {
+  if (!groupInfo || typeof groupInfo !== 'object') return null;
+  const group = groupInfo as AnyGroup;
+  const owner = group.ownerAddress || group.owner;
+  return typeof owner === 'string' ? owner : null;
+}
+
 export function HomePage() {
   const navigate = useNavigate();
-  const { auth } = useGlobal();
+  const { auth, identifierOperations, lists } = useGlobal();
+  const { publishMultipleResources } = usePublish();
 
   const [tab, setTab] = useAtom(homeTabAtom);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [testGroupId, setTestGroupId] = useState('');
+  const [payingSubscriptionId, setPayingSubscriptionId] = useState<
+    string | null
+  >(null);
   const isRefreshingRef = useRef(false);
 
   const {
@@ -50,10 +77,10 @@ export function HomePage() {
     error: managedError,
   } = useInitializeManagedSubscriptions(refreshKey);
 
-  const { actions: allActions, loading: actionsLoading } =
+  const { actions: allActions } =
     useAllManagedSubscriptionActions(managedSubs);
 
-  const { actions: currentActions, loading: currentActionsLoading } =
+  const { actions: currentActions } =
     useAllCurrentSubscriptionActions(currentSubs);
 
   // Subscriptions that need payment and are active (exclude disabled – no action required for those)
@@ -67,6 +94,14 @@ export function HomePage() {
     [currentSubs, currentActions.subscriptionsWithActions]
   );
   const activeNeedingPaymentCount = activeSubscriptionsNeedingPayment.length;
+
+  const payingSubscription = useMemo(
+    () =>
+      payingSubscriptionId
+        ? (currentSubs.find((sub) => sub.id === payingSubscriptionId) ?? null)
+        : null,
+    [currentSubs, payingSubscriptionId]
+  );
 
   // Track loading state to prevent concurrent fetches
   useEffect(() => {
@@ -98,11 +133,101 @@ export function HomePage() {
     }
   };
 
-  const handleOpenSubscriptionByGroupId = () => {
-    const gid = Number(testGroupId.trim());
-    if (!Number.isInteger(gid) || gid <= 0) return;
-    const subscriptionId = getSubscriptionIdForGroup(gid);
-    navigate(`/subscription/${subscriptionId}`);
+  const handleOpenPayNow = (subscriptionId: string) => {
+    if (!auth?.name || !auth?.address) return;
+    setPayingSubscriptionId(subscriptionId);
+  };
+
+  const handleCardPayment = async (intervalCount: number): Promise<string> => {
+    if (!payingSubscription || !auth?.name || !auth?.address) {
+      throw new Error('Missing subscription or auth data');
+    }
+
+    const ownerAddress = getOwnerAddress(payingSubscription.groupInfo);
+    const groupId = getGroupId(payingSubscription.groupInfo);
+    if (!ownerAddress || groupId == null) {
+      throw new Error('Missing group owner/group id');
+    }
+
+    const lockedPrice =
+      currentActions.subscriptionDisplayOverrides[payingSubscription.id]
+        ?.priceQort;
+    // Match SubscriptionPage behavior: charge the lower of locked/current.
+    const amountToPay =
+      lockedPrice != null
+        ? Math.min(lockedPrice, payingSubscription.priceQort)
+        : payingSubscription.priceQort;
+    const totalAmountToPay =
+      amountToPay * Math.max(1, Math.floor(intervalCount));
+    const signature = await sendSubscriptionPayment(
+      ownerAddress,
+      totalAmountToPay
+    );
+    const { detailsIdentifier } = await buildSubscriptionIdentifiers(
+      identifierOperations,
+      payingSubscription.id
+    );
+
+    cachePendingSubscribeAction({
+      subscriberName: auth.name,
+      subscriberAddress: auth.address,
+      subscriptionId: payingSubscription.id,
+      detailsIdentifier,
+      groupId,
+      ownerAddress,
+      paymentTxSignature: signature,
+      joinRequestSent: true,
+      recordPublished: false,
+    });
+
+    return signature;
+  };
+
+  const handleCardPublish = async (paymentSignature: string): Promise<void> => {
+    if (
+      !payingSubscription ||
+      !auth?.name ||
+      !auth?.address ||
+      !identifierOperations
+    ) {
+      throw new Error('Missing required data');
+    }
+
+    const ownerAddress = getOwnerAddress(payingSubscription.groupInfo);
+    if (!ownerAddress) {
+      throw new Error('Missing owner address');
+    }
+
+    const { detailsIdentifier } = await buildSubscriptionIdentifiers(
+      identifierOperations,
+      payingSubscription.id
+    );
+    const subscriptionIndexIdentifier =
+      await resolvePaymentIndexIdentifierForPublish({
+        ownerName: payingSubscription.ownerName,
+        subscriptionId: payingSubscription.id,
+        paymentTxSignature: paymentSignature,
+        lockedIndexIdentifier:
+          currentActions.subscriptionPaymentIndexIdentifier[
+            payingSubscription.id
+          ] ?? undefined,
+        identifierOperations,
+        lists,
+      });
+    console.log('subscriptionIndexIdentifier', subscriptionIndexIdentifier);
+    await publishSubscriptionRecord({
+      subscriberName: auth.name,
+      subscriberAddress: auth.address,
+      detailsIdentifier,
+      subscriptionIndexIdentifier,
+      paymentTxSignature: paymentSignature,
+      publishMultipleResources,
+    });
+  };
+
+  const handlePayNowComplete = () => {
+    setPayingSubscriptionId(null);
+    setRefreshKey((prev) => prev + 1);
   };
 
   return (
@@ -118,7 +243,7 @@ export function HomePage() {
           </Typography>
           <Typography variant="body1" sx={{ opacity: 0.85 }}>
             {auth?.name ? `Welcome, ${auth.name}. ` : null}
-            Manage your subscriptions and discover new content creators.
+            Manage your subscription.
           </Typography>
         </Box>
         <Tooltip title="Refresh data">
@@ -132,7 +257,7 @@ export function HomePage() {
       </Stack>
 
       {/* Test: open subscription by group ID */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+      {/* <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="body2" sx={{ opacity: 0.8 }}>
           Test:
         </Typography>
@@ -153,10 +278,10 @@ export function HomePage() {
         >
           Open as subscriber
         </Button>
-      </Stack>
+      </Stack> */}
 
       {/* Actions notification banner */}
-      {!actionsLoading && allActions.totalActions > 0 && (
+      {allActions.totalActions > 0 && (
         <Alert
           severity="warning"
           icon={<NotificationsActiveIcon />}
@@ -195,7 +320,7 @@ export function HomePage() {
       )}
 
       {/* Subscriptions I'm in - payment notification banner (only for active subscriptions) */}
-      {!currentActionsLoading && activeNeedingPaymentCount > 0 && (
+      {activeNeedingPaymentCount > 0 && (
         <Alert
           severity="error"
           icon={<NotificationsActiveIcon />}
@@ -210,8 +335,7 @@ export function HomePage() {
           <Typography variant="body2" fontWeight={600}>
             {activeNeedingPaymentCount} subscription
             {activeNeedingPaymentCount !== 1 ? 's' : ''}{' '}
-            {activeNeedingPaymentCount !== 1 ? 'need' : 'needs'}{' '}
-            payment
+            {activeNeedingPaymentCount !== 1 ? 'need' : 'needs'} payment
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
             Your payment is due. Please make a payment to maintain access.
@@ -286,14 +410,19 @@ export function HomePage() {
             )
           ) : (
             currentSubs.map((s) => {
-              const override = currentActions.subscriptionDisplayOverrides?.[s.id];
+              const override =
+                currentActions.subscriptionDisplayOverrides?.[s.id];
               const expiresAt = currentActions.subscriptionExpiresAt?.[s.id];
               return (
                 <CurrentSubscriptionCard
                   key={s.id}
                   subscription={s}
                   onView={(id) => navigate(`/subscription/${id}`)}
-                  needsPayment={currentActions.subscriptionsWithActions.includes(s.id)}
+                  onPayNow={handleOpenPayNow}
+                  payNowDisabled={!auth?.name || !auth?.address}
+                  needsPayment={currentActions.subscriptionsWithActions.includes(
+                    s.id
+                  )}
                   displayPriceQort={override?.priceQort}
                   displayBillingInterval={override?.billingInterval}
                   expiresAt={expiresAt}
@@ -352,6 +481,42 @@ export function HomePage() {
             })
           )}
         </Stack>
+      )}
+      {payingSubscription && (
+        <SubscribeModal
+          open={!!payingSubscription}
+          onClose={() => setPayingSubscriptionId(null)}
+          subscriptionTitle={payingSubscription.title}
+          unitAmount={
+            currentActions.subscriptionDisplayOverrides[payingSubscription.id]
+              ?.priceQort != null
+              ? Math.min(
+                  currentActions.subscriptionDisplayOverrides[
+                    payingSubscription.id
+                  ].priceQort,
+                  payingSubscription.priceQort
+                )
+              : payingSubscription.priceQort
+          }
+          intervalLabel={(() => {
+            const bi =
+              currentActions.subscriptionDisplayOverrides[payingSubscription.id]
+                ?.billingInterval ?? payingSubscription.billingInterval;
+            return bi === 'hourly'
+              ? 'hour'
+              : bi === 'daily'
+                ? 'day'
+                : bi === 'yearly'
+                  ? 'year'
+                  : 'month';
+          })()}
+          groupId={getGroupId(payingSubscription.groupInfo) ?? 0}
+          onPayment={handleCardPayment}
+          onJoinGroup={async () => {}}
+          onPublish={handleCardPublish}
+          onComplete={handlePayNowComplete}
+          isRenewal
+        />
       )}
     </Stack>
   );

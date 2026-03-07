@@ -40,13 +40,16 @@ export function useAllManagedSubscriptionActions(managedSubscriptions: AnyGroup[
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!managedSubscriptions || managedSubscriptions.length === 0 || !auth?.name || !identifierOperations || !lists?.fetchResourcesResultsOnly) {
-      setAggregatedActions({
-        totalPendingJoinRequests: 0,
-        totalNeedingReEncryption: 0,
-        totalActions: 0,
-        groupsWithActions: [],
-      });
+    const hasSubscriptions = managedSubscriptions && managedSubscriptions.length > 0;
+    if (!hasSubscriptions || !auth?.name || !identifierOperations || !lists?.fetchResourcesResultsOnly) {
+      if (!hasSubscriptions) {
+        setAggregatedActions({
+          totalPendingJoinRequests: 0,
+          totalNeedingReEncryption: 0,
+          totalActions: 0,
+          groupsWithActions: [],
+        });
+      }
       setLoading(false);
       return;
     }

@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
 import { getPendingSubscribeActionByGroup } from '../lib/pendingTransactionsCache';
 import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
+import {
+  getPaidIntervalsFromAmount,
+  isMultipleOfUnitPrice,
+} from '../lib/resolvePaymentIndexIdentifier';
 
 export type SubscriptionStatus =
   | 'not-subscribed'
@@ -157,6 +161,7 @@ export function useCheckSubscriptionStatus(
         let paymentValid = false;
         let intervalDaysAtPayment: number = 30; // fallback
         let paymentTimestamp: number | undefined;
+        let paidIntervals = 1;
 
         if (hasPaymentRecord && detailsIdentifier && auth.name) {
           try {
@@ -211,8 +216,12 @@ export function useCheckSubscriptionStatus(
                       );
                       if (
                         expectedPrice != null &&
-                        +(txData?.amount ?? 0) >= expectedPrice - 0.00001
+                        isMultipleOfUnitPrice(+txData?.amount, expectedPrice)
                       ) {
+                        paidIntervals = getPaidIntervalsFromAmount(
+                          +txData?.amount,
+                          expectedPrice
+                        );
                         paymentValid = true;
                       }
                     }
@@ -244,7 +253,8 @@ export function useCheckSubscriptionStatus(
           ) {
             // Same expiry/grace logic as useSubscriberPaymentStatus
             const subscriptionEndsAt =
-              paymentTimestamp + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+              paymentTimestamp +
+              paidIntervals * intervalDaysAtPayment * 24 * 60 * 60 * 1000;
             console.log('subscriptionEndsAt', subscriptionEndsAt);
             const now = Date.now();
             if (now < subscriptionEndsAt) {

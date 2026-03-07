@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Stack,
   Step,
   StepLabel,
@@ -15,6 +16,8 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 
 type SubscriptionStep = 'payment' | 'joinGroup' | 'publish' | 'complete';
 
@@ -22,31 +25,38 @@ interface SubscribeModalProps {
   open: boolean;
   onClose: () => void;
   subscriptionTitle: string;
-  amount: number;
+  unitAmount: number;
+  /** e.g. "month", "hour", "day", "year" - used for "Pay for 2 months" copy */
+  intervalLabel: string;
   groupId: number;
-  onPayment: () => Promise<string>; // Returns payment signature
+  onPayment: (intervalCount: number) => Promise<string>; // Returns payment signature
   onJoinGroup: () => Promise<void>; // Join group request
   onPublish: (paymentSignature: string) => Promise<void>;
   onComplete?: () => void; // Optional callback when subscription is complete
   isRenewal?: boolean; // If true, skip join group step (user is already a member)
+  defaultIntervalCount?: number;
 }
 
 export function SubscribeModal({
   open,
   onClose,
   subscriptionTitle,
-  amount,
+  unitAmount,
+  intervalLabel,
   groupId,
   onPayment,
   onJoinGroup,
   onPublish,
   onComplete,
   isRenewal = false,
+  defaultIntervalCount = 1,
 }: SubscribeModalProps) {
   const [currentStep, setCurrentStep] = useState<SubscriptionStep>('payment');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentSignature, setPaymentSignature] = useState<string | null>(null);
+  const [intervalCount, setIntervalCount] = useState<number>(defaultIntervalCount);
+  const totalAmount = unitAmount * intervalCount;
 
   const steps = isRenewal
     ? ['Payment', 'Publish Record', 'Complete']
@@ -57,7 +67,7 @@ export function SubscribeModal({
     setError(null);
 
     try {
-      const signature = await onPayment();
+      const signature = await onPayment(intervalCount);
       setPaymentSignature(signature);
       // Skip join group step if this is a renewal
       setCurrentStep(isRenewal ? 'publish' : 'joinGroup');
@@ -112,6 +122,7 @@ export function SubscribeModal({
       setCurrentStep('payment');
       setPaymentSignature(null);
       setError(null);
+      setIntervalCount(defaultIntervalCount);
       onClose();
     }
   };
@@ -162,10 +173,13 @@ export function SubscribeModal({
     >
       <DialogTitle>
         <Typography variant="h6" fontWeight={800}>
-          {isRenewal
-            ? `Renew Subscription to ${subscriptionTitle}`
-            : `Subscribe to ${subscriptionTitle}`}
+          {isRenewal ? 'Renew' : 'Subscribe to'} {subscriptionTitle}
         </Typography>
+        {currentStep === 'payment' && (
+          <Typography variant="body2" sx={{ opacity: 0.6, mt: 0.25, fontWeight: 400 }}>
+            {unitAmount} QORT / {intervalLabel}
+          </Typography>
+        )}
       </DialogTitle>
 
       <DialogContent>
@@ -186,26 +200,69 @@ export function SubscribeModal({
 
           {currentStep === 'payment' && (
             <Box>
-              <Typography variant="body1" gutterBottom>
-                <strong>Step 1:</strong> Send payment to{' '}
-                {isRenewal ? 'pay subscription' : 'subscribe'}
+              {/* Duration picker */}
+              <Typography variant="body2" sx={{ opacity: 0.75, mb: 1.5 }}>
+                {isRenewal ? 'How long would you like to renew for?' : 'Choose how long to subscribe for:'}
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.85, mt: 1 }}>
-                You will be prompted to send <strong>{amount} QORT</strong> to
-                the subscription owner.
+
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="center"
+                spacing={2}
+                sx={{ mb: 2 }}
+              >
+                <IconButton
+                  onClick={() => setIntervalCount((n) => Math.max(1, n - 1))}
+                  disabled={isProcessing || intervalCount <= 1}
+                  size="large"
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                >
+                  <RemoveIcon />
+                </IconButton>
+                <Box textAlign="center" sx={{ minWidth: 100 }}>
+                  <Typography variant="h3" fontWeight={800} lineHeight={1}>
+                    {intervalCount}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.65, mt: 0.25 }}>
+                    {intervalCount === 1 ? intervalLabel : `${intervalLabel}s`}
+                  </Typography>
+                </Box>
+                <IconButton
+                  onClick={() => setIntervalCount((n) => Math.min(12, n + 1))}
+                  disabled={isProcessing || intervalCount >= 12}
+                  size="large"
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                >
+                  <AddIcon />
+                </IconButton>
+              </Stack>
+
+              {/* Summary card */}
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  p: 2,
+                  backgroundColor: 'action.hover',
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2" sx={{ opacity: 0.75 }}>
+                    {unitAmount} QORT × {intervalCount} {intervalCount === 1 ? intervalLabel : `${intervalLabel}s`}
+                  </Typography>
+                  <Typography variant="h6" fontWeight={800}>
+                    {totalAmount} QORT
+                  </Typography>
+                </Stack>
+              </Box>
+
+              <Typography variant="caption" sx={{ display: 'block', opacity: 0.55, mt: 1.5 }}>
+                {!isRenewal
+                  ? 'After payment you\'ll need to join the group and publish your subscription record on-chain.'
+                  : 'After payment you\'ll need to publish your updated subscription record on-chain.'}
               </Typography>
-              {!isRenewal && (
-                <Typography variant="body2" sx={{ opacity: 0.7, mt: 1 }}>
-                  After confirming the payment, you'll need to request to join
-                  the group and publish your subscription record on-chain.
-                </Typography>
-              )}
-              {isRenewal && (
-                <Typography variant="body2" sx={{ opacity: 0.7, mt: 1 }}>
-                  After confirming the payment, you'll need to publish your
-                  updated subscription record on-chain.
-                </Typography>
-              )}
             </Box>
           )}
 
@@ -319,7 +376,7 @@ export function SubscribeModal({
               disabled={isProcessing}
               startIcon={isProcessing ? <CircularProgress size={16} /> : null}
             >
-              {isProcessing ? 'Processing...' : 'Send Payment'}
+              {isProcessing ? 'Processing...' : 'Make Payment'}
             </Button>
           </>
         )}

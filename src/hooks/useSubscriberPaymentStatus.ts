@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
 import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
+import {
+  getPaidIntervalsFromAmount,
+  isMultipleOfUnitPrice,
+} from '../lib/resolvePaymentIndexIdentifier';
 
 export type SubscriptionRecord = {
   si: string; // subscriptionIndexIdentifier
@@ -14,6 +18,8 @@ export type SubscriberPaymentInfo = {
   status: PaymentStatus;
   lastPaymentTx?: string;
   lastPaymentDate?: number;
+  lastPaymentAmount?: number;
+  lastPaymentUnitPrice?: number;
   subscriptionRecord?: SubscriptionRecord;
   expiresAt?: number; // When the paid period ends (excludes grace period)
 };
@@ -118,7 +124,8 @@ export function useSubscriberPaymentStatus(
   subscriptionStates: SubscriptionState[] | undefined,
   intervalDays: number,
   graceDays: number,
-  enabled = true
+  enabled = true,
+  refreshKey = 0
 ) {
   const { lists } = useGlobal();
   const [paymentInfo, setPaymentInfo] = useState<
@@ -148,15 +155,19 @@ export function useSubscriberPaymentStatus(
         (s) => s.address !== subscriptionOwnerAddress
       );
 
-      for (const s of subscribersExcludingOwner) {
-        newPaymentInfo.set(s.address, {
-          address: s.address,
-          status: 'checking',
-        });
-      }
-
+      // Only show 'checking' placeholder for addresses we have no prior data for.
+      // During a refresh we preserve the existing statuses so the UI doesn't
+      // flash "Unpaid" while we're re-validating.
       if (!cancelled) {
-        setPaymentInfo(new Map(newPaymentInfo));
+        setPaymentInfo((prev) => {
+          const next = new Map(prev);
+          for (const s of subscribersExcludingOwner) {
+            if (!next.has(s.address)) {
+              next.set(s.address, { address: s.address, status: 'checking' });
+            }
+          }
+          return next;
+        });
       }
 
       const results = await Promise.allSettled(
@@ -225,7 +236,10 @@ export function useSubscriberPaymentStatus(
             const paymentTxSignature = recordData.tx;
             let paymentValid = false;
             let paymentTimestamp: number | undefined;
+            let txAmount: number | undefined;
+            let unitPriceAtPayment: number | undefined;
             let validationError: string | null = null;
+            let paidIntervals = 1;
 
             try {
               const txResponse = await fetch(
@@ -236,6 +250,7 @@ export function useSubscriberPaymentStatus(
               } else {
                 const txData = await txResponse.json();
                 paymentTimestamp = txData?.timestamp;
+                txAmount = txData?.amount != null ? +txData.amount : undefined;
 
                 // Validate transaction type is PAYMENT
                 if (txData?.type !== 'PAYMENT') {
@@ -262,10 +277,17 @@ export function useSubscriberPaymentStatus(
 
                   if (expectedPrice == null) {
                     validationError = 'Could not get price at time of payment';
-                  } else if (+txData?.amount >= expectedPrice - 0.00001) {
-                    paymentValid = true;
+                  } else if (
+                    isMultipleOfUnitPrice(+txData?.amount, expectedPrice)
+                  ) {
+                    unitPriceAtPayment = expectedPrice;
+                    paidIntervals = getPaidIntervalsFromAmount(
+                      +txData?.amount,
+                      expectedPrice
+                    );
+                    paymentValid = paidIntervals >= 1;
                   } else {
-                    validationError = `Payment amount ${txData?.amount} doesn't match expected price ${expectedPrice} (price at time of payment: ${new Date(paymentTimestamp).toLocaleDateString()})`;
+                    validationError = `Payment amount ${txData?.amount} is not a valid multiple of expected price ${expectedPrice} (price at time of payment: ${new Date(paymentTimestamp).toLocaleDateString()})`;
                   }
                 } else {
                   validationError = 'Payment timestamp missing';
@@ -291,7 +313,8 @@ export function useSubscriberPaymentStatus(
 
             if (paymentValid && paymentTimestamp) {
               const subscriptionEndsAt =
-                paymentTimestamp + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+                paymentTimestamp +
+                paidIntervals * intervalDaysAtPayment * 24 * 60 * 60 * 1000;
               const graceEndsAt =
                 subscriptionEndsAt + graceDays * 24 * 60 * 60 * 1000;
               expiresAt = subscriptionEndsAt;
@@ -315,6 +338,8 @@ export function useSubscriberPaymentStatus(
               status: finalStatus,
               lastPaymentTx: paymentTxSignature,
               lastPaymentDate: paymentTimestamp,
+              lastPaymentAmount: txAmount,
+              lastPaymentUnitPrice: unitPriceAtPayment,
               subscriptionRecord: recordData,
               expiresAt,
             };
@@ -344,7 +369,15 @@ export function useSubscriberPaymentStatus(
       });
 
       if (!cancelled) {
-        setPaymentInfo(newPaymentInfo);
+        // Merge results into the existing map so any addresses not in this
+        // batch are left untouched (no flash to stale/empty state).
+        setPaymentInfo((prev) => {
+          const merged = new Map(prev);
+          newPaymentInfo.forEach((value, key) => {
+            merged.set(key, value);
+          });
+          return merged;
+        });
         setLoading(false);
       }
     }
@@ -365,6 +398,7 @@ export function useSubscriberPaymentStatus(
     graceDays,
     enabled,
     lists,
+    refreshKey,
   ]);
 
   return {

@@ -30,7 +30,11 @@ import {
   publishSubscription,
   type CreateSubscriptionForm,
 } from '../lib/subscriptionPublishing';
-import { useTestIdentifiers, HOURLY_INTERVAL_DAYS, GRACE_20_MIN_DAYS } from '../constants';
+import {
+  useTestIdentifiers,
+  HOURLY_INTERVAL_DAYS,
+  GRACE_20_MIN_DAYS,
+} from '../constants';
 import { cachePendingSubscription } from '../lib/pendingTransactionsCache';
 
 function isValidAmountInput(value: string) {
@@ -302,8 +306,7 @@ export function CreateSubscriptionPage() {
           Create subscription
         </Typography>
         <Typography sx={{ opacity: 0.8 }}>
-          Step 1: choose a private group + publish two records (on-chain index +
-          full details).
+          Step 1: choose a private group + publish subscription information.
         </Typography>
       </Stack>
 
@@ -411,7 +414,9 @@ export function CreateSubscriptionPage() {
                     value={intervalDays}
                     onChange={(e) => setIntervalDays(Number(e.target.value))}
                   >
-                    <MenuItem value={HOURLY_INTERVAL_DAYS}>Hourly (for testing)</MenuItem>
+                    <MenuItem value={HOURLY_INTERVAL_DAYS}>
+                      Hourly (for testing)
+                    </MenuItem>
                     <MenuItem value={1}>Daily (1 day)</MenuItem>
                     <MenuItem value={30}>Monthly (30 days)</MenuItem>
                   </Select>
@@ -427,7 +432,9 @@ export function CreateSubscriptionPage() {
                     value={graceDays}
                     onChange={(e) => setGraceDays(Number(e.target.value))}
                   >
-                    <MenuItem value={GRACE_20_MIN_DAYS}>20 min (for testing)</MenuItem>
+                    <MenuItem value={GRACE_20_MIN_DAYS}>
+                      20 min (for testing)
+                    </MenuItem>
                     {[3, 5, 7].map((d) => (
                       <MenuItem key={d} value={d}>
                         {d} days
@@ -444,10 +451,7 @@ export function CreateSubscriptionPage() {
                   : intervalDays === 1
                     ? 'daily'
                     : 'monthly'}{' '}
-                billing and a{' '}
-                {graceDays < 0.1
-                  ? '20-min'
-                  : `${graceDays}-day`}{' '}
+                billing and a {graceDays < 0.1 ? '20-min' : `${graceDays}-day`}{' '}
                 grace period after payment is due.
               </Alert>
             </Stack>

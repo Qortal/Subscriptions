@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useGlobal, usePublish } from 'qapp-core';
+import { useGlobal } from 'qapp-core';
 import { buildSubscriptionIdentifiers } from '../lib/subscriptionPublishing';
 import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
 import type { BillingInterval } from '../types/subscription';
+import {
+  getPaidIntervalsFromAmount,
+  isMultipleOfUnitPrice,
+} from '../lib/resolvePaymentIndexIdentifier';
 
 /** Normalize PRODUCT record so we have { si?, tx } even when API returns base64 or wrapper */
 function parseProductRecordData(raw: any): { si?: string; tx: string } | null {
@@ -38,6 +42,8 @@ export type CurrentSubscriptionActions = {
   >;
   /** Next due (subscription end) timestamp in ms for "X mins/hours/days left" */
   subscriptionExpiresAt: Record<string, number>;
+  /** Locked-in index identifier (si) from subscriber's PRODUCT record, used for renewals */
+  subscriptionPaymentIndexIdentifier: Record<string, string>;
 };
 
 function intervalDaysToBillingInterval(intervalDays: number): BillingInterval {
@@ -54,48 +60,12 @@ export type SubscriptionState = {
   effectiveFrom: number;
 };
 
-function _getPriceAtTime(
-  states: SubscriptionState[] | undefined,
-  timestamp: number,
-  currentPrice: number
-): number {
-  if (!states || states.length === 0) return currentPrice;
-  const sorted = [...states].sort((a, b) => a.effectiveFrom - b.effectiveFrom);
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].effectiveFrom <= timestamp) return sorted[i].price;
-  }
-  return sorted[0]?.price ?? currentPrice;
-}
-
-function _getIntervalDaysAtTime(
-  states: SubscriptionState[] | undefined,
-  timestamp: number,
-  currentIntervalDays: number
-): number {
-  if (!states || states.length === 0) return currentIntervalDays;
-  const sorted = [...states].sort((a, b) => a.effectiveFrom - b.effectiveFrom);
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].effectiveFrom <= timestamp) {
-      const interval = sorted[i].interval;
-      if (interval === 'HOUR') return 1 / 24;
-      if (interval === 'DAY') return 1;
-      if (interval === 'WEEK') return 7;
-      if (interval === 'YEAR') return 365;
-      return 30;
-    }
-  }
-  return currentIntervalDays;
-}
-void _getPriceAtTime;
-void _getIntervalDaysAtTime;
-
 /**
  * Hook to check if any current subscriptions need payment.
  * Validates payment amount and period; uses index (si) from PRODUCT for expected price/interval when present.
  */
 export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
   const { auth, identifierOperations, lists } = useGlobal();
-  const { fetchPublish } = usePublish(3, 'JSON');
   const [aggregatedActions, setAggregatedActions] =
     useState<CurrentSubscriptionActions>({
       totalNeedingPayment: 0,
@@ -103,25 +73,33 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
       subscriptionsWithActions: [],
       subscriptionDisplayOverrides: {},
       subscriptionExpiresAt: {},
+      subscriptionPaymentIndexIdentifier: {},
     });
 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const hasSubscriptions =
+      currentSubscriptions && currentSubscriptions.length > 0;
     if (
-      !currentSubscriptions ||
-      currentSubscriptions.length === 0 ||
+      !hasSubscriptions ||
       !auth?.name ||
       !identifierOperations ||
       !lists?.fetchResourcesResultsOnly
     ) {
-      setAggregatedActions({
-        totalNeedingPayment: 0,
-        totalActions: 0,
-        subscriptionsWithActions: [],
-        subscriptionDisplayOverrides: {},
-        subscriptionExpiresAt: {},
-      });
+      // Only wipe existing results when subscriptions are genuinely gone.
+      // If deps like auth/identifierOperations are briefly unavailable during a
+      // re-fetch, keep the previous state so the UI doesn't flash or shift.
+      if (!hasSubscriptions) {
+        setAggregatedActions({
+          totalNeedingPayment: 0,
+          totalActions: 0,
+          subscriptionsWithActions: [],
+          subscriptionDisplayOverrides: {},
+          subscriptionExpiresAt: {},
+          subscriptionPaymentIndexIdentifier: {},
+        });
+      }
       setLoading(false);
       return;
     }
@@ -158,6 +136,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 billingInterval: BillingInterval;
               } | null = null;
               let expiresAt: number | undefined;
+              let paymentIndexIdentifier: string | undefined;
 
               if (paymentRecords && paymentRecords.length > 0) {
                 const record = paymentRecords[0];
@@ -179,6 +158,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 const parsed = parseProductRecordData(recordData);
                 console.log('parsed', parsed);
                 if (parsed) recordData = parsed;
+                if (parsed?.si) paymentIndexIdentifier = parsed.si;
                 if (!recordData || !recordData.tx) needsPayment = true;
 
                 try {
@@ -190,10 +170,12 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                   const txData = await txResponse.json();
                   const paymentTs = txData?.timestamp;
                   const amountPaid = parseFloat(txData?.amount || '0');
+                  console.log('amountPaid', amountPaid);
                   if (paymentTs == null || amountPaid <= 0) needsPayment = true;
                   console.log('paymentTs', paymentTs, amountPaid);
                   let expectedPrice: number;
                   let intervalDaysAtPayment: number;
+                  let paidIntervals = 1;
 
                   if (
                     recordData.si &&
@@ -230,10 +212,18 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                     amountPaid,
                     intervalDaysAtPayment
                   );
-                  if (amountPaid < expectedPrice - 0.00001) needsPayment = true;
+                  if (!isMultipleOfUnitPrice(amountPaid, expectedPrice)) {
+                    needsPayment = true;
+                  } else {
+                    paidIntervals = getPaidIntervalsFromAmount(
+                      amountPaid,
+                      expectedPrice
+                    );
+                  }
 
                   const subscriptionEndsAt =
-                    paymentTs + intervalDaysAtPayment * 24 * 60 * 60 * 1000;
+                    paymentTs +
+                    paidIntervals * intervalDaysAtPayment * 24 * 60 * 60 * 1000;
                   expiresAt = subscriptionEndsAt;
                   const now = Date.now();
 
@@ -252,6 +242,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 needsPayment,
                 displayOverride,
                 expiresAt,
+                paymentIndexIdentifier,
               };
             } catch (error) {
               console.error(
@@ -271,6 +262,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
             { priceQort: number; billingInterval: BillingInterval }
           > = {};
           const subscriptionExpiresAt: Record<string, number> = {};
+          const subscriptionPaymentIndexIdentifier: Record<string, string> = {};
 
           results.forEach((result) => {
             if (!result) return;
@@ -285,6 +277,10 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
             if (result.expiresAt != null) {
               subscriptionExpiresAt[result.subscriptionId] = result.expiresAt;
             }
+            if (result.paymentIndexIdentifier) {
+              subscriptionPaymentIndexIdentifier[result.subscriptionId] =
+                result.paymentIndexIdentifier;
+            }
           });
 
           setAggregatedActions({
@@ -293,6 +289,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
             subscriptionsWithActions: subscriptionsNeedingPayment,
             subscriptionDisplayOverrides,
             subscriptionExpiresAt,
+            subscriptionPaymentIndexIdentifier,
           });
           setLoading(false);
         }
@@ -309,13 +306,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
     return () => {
       cancelled = true;
     };
-  }, [
-    currentSubscriptions,
-    auth?.name,
-    identifierOperations,
-    lists,
-    fetchPublish,
-  ]);
+  }, [currentSubscriptions, auth?.name, identifierOperations, lists]);
 
   return {
     actions: aggregatedActions,
