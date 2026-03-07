@@ -14,10 +14,11 @@ import {
   Stepper,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
+import { useQortBalance } from 'qapp-core';
 
 type SubscriptionStep = 'payment' | 'joinGroup' | 'publish' | 'complete';
 
@@ -35,6 +36,14 @@ interface SubscribeModalProps {
   onComplete?: () => void; // Optional callback when subscription is complete
   isRenewal?: boolean; // If true, skip join group step (user is already a member)
   defaultIntervalCount?: number;
+}
+
+async function fetchUnitFee(txType: 'PAYMENT' | 'ARBITRARY' | 'JOIN_GROUP'): Promise<number> {
+  const timestamp = Date.now();
+  const res = await fetch(`/transactions/unitfee?txType=${txType}&timestamp=${timestamp}`);
+  if (!res.ok) throw new Error(`Failed to fetch ${txType} fee`);
+  const fee = await res.json();
+  return +((Number(fee) / 1e8).toFixed(8));
 }
 
 export function SubscribeModal({
@@ -56,7 +65,54 @@ export function SubscribeModal({
   const [error, setError] = useState<string | null>(null);
   const [paymentSignature, setPaymentSignature] = useState<string | null>(null);
   const [intervalCount, setIntervalCount] = useState<number>(defaultIntervalCount);
+  const [paymentFee, setPaymentFee] = useState<number | null>(null);
+  const [joinGroupFee, setJoinGroupFee] = useState<number | null>(null);
+  const [publishFee, setPublishFee] = useState<number | null>(null);
+  const [feesLoading, setFeesLoading] = useState(false);
+
+  const { value: balance } = useQortBalance();
+
   const totalAmount = unitAmount * intervalCount;
+
+  const totalRequired =
+    paymentFee !== null && publishFee !== null && (isRenewal || joinGroupFee !== null)
+      ? +((totalAmount + paymentFee + (isRenewal ? 0 : joinGroupFee!) + publishFee).toFixed(8))
+      : null;
+
+  const hasInsufficientBalance =
+    balance !== null && totalRequired !== null && balance < totalRequired;
+
+  useEffect(() => {
+    if (!open || currentStep !== 'payment') return;
+
+    let cancelled = false;
+    setFeesLoading(true);
+
+    const feeRequests: Promise<number>[] = [
+      fetchUnitFee('PAYMENT'),
+      fetchUnitFee('ARBITRARY'),
+    ];
+    if (!isRenewal) feeRequests.push(fetchUnitFee('JOIN_GROUP'));
+
+    Promise.all(feeRequests)
+      .then(([pFee, aFee, jFee]) => {
+        if (!cancelled) {
+          setPaymentFee(pFee);
+          setPublishFee(aFee);
+          if (!isRenewal) setJoinGroupFee(jFee);
+        }
+      })
+      .catch(() => {
+        // Fees unavailable — don't block the user
+      })
+      .finally(() => {
+        if (!cancelled) setFeesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, currentStep, isRenewal]);
 
   const steps = isRenewal
     ? ['Payment', 'Publish Record', 'Complete']
@@ -123,6 +179,9 @@ export function SubscribeModal({
       setPaymentSignature(null);
       setError(null);
       setIntervalCount(defaultIntervalCount);
+      setPaymentFee(null);
+      setPublishFee(null);
+      setJoinGroupFee(null);
       onClose();
     }
   };
@@ -256,7 +315,63 @@ export function SubscribeModal({
                     {totalAmount} QORT
                   </Typography>
                 </Stack>
+
+                {feesLoading && (
+                  <Stack direction="row" alignItems="center" spacing={1} mt={1}>
+                    <CircularProgress size={12} />
+                    <Typography variant="caption" sx={{ opacity: 0.55 }}>
+                      Loading fees...
+                    </Typography>
+                  </Stack>
+                )}
+
+                {!feesLoading && paymentFee !== null && publishFee !== null && (isRenewal || joinGroupFee !== null) && (
+                  <>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" mt={1}>
+                      <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                        + TX fee (payment)
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                        {paymentFee} QORT
+                      </Typography>
+                    </Stack>
+                    {!isRenewal && joinGroupFee !== null && (
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
+                        <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                          + TX fee (join group)
+                        </Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                          {joinGroupFee} QORT
+                        </Typography>
+                      </Stack>
+                    )}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
+                      <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                        + TX fee (publish)
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                        {publishFee} QORT
+                      </Typography>
+                    </Stack>
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1, pt: 1 }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" fontWeight={600}>
+                          Total required
+                        </Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {totalRequired} QORT
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  </>
+                )}
               </Box>
+
+              {hasInsufficientBalance && (
+                <Alert severity="warning" sx={{ mt: 1.5 }}>
+                  Insufficient balance. You have <strong>{balance?.toFixed(8)} QORT</strong> but need at least <strong>{totalRequired} QORT</strong> (including fees).
+                </Alert>
+              )}
 
               <Typography variant="caption" sx={{ display: 'block', opacity: 0.55, mt: 1.5 }}>
                 {!isRenewal
@@ -373,7 +488,7 @@ export function SubscribeModal({
             <Button
               variant="contained"
               onClick={handlePayment}
-              disabled={isProcessing}
+              disabled={isProcessing || feesLoading || hasInsufficientBalance}
               startIcon={isProcessing ? <CircularProgress size={16} /> : null}
             >
               {isProcessing ? 'Processing...' : 'Make Payment'}

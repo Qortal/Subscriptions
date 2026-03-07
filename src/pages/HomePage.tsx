@@ -7,6 +7,7 @@ import {
   Stack,
   Tab,
   Tabs,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -64,6 +65,14 @@ export function HomePage() {
   const [payingSubscriptionId, setPayingSubscriptionId] = useState<
     string | null
   >(null);
+  const [testGroupId, setTestGroupId] = useState('');
+
+  const handleOpenSubscriptionByGroupId = () => {
+    const id = parseInt(testGroupId.trim(), 10);
+    if (!Number.isNaN(id) && id > 0) {
+      navigate(`/subscription/subscription-${id}`);
+    }
+  };
   const isRefreshingRef = useRef(false);
 
   const {
@@ -77,8 +86,7 @@ export function HomePage() {
     error: managedError,
   } = useInitializeManagedSubscriptions(refreshKey);
 
-  const { actions: allActions } =
-    useAllManagedSubscriptionActions(managedSubs);
+  const { actions: allActions } = useAllManagedSubscriptionActions(managedSubs);
 
   const { actions: currentActions } =
     useAllCurrentSubscriptionActions(currentSubs);
@@ -257,7 +265,12 @@ export function HomePage() {
       </Stack>
 
       {/* Test: open subscription by group ID */}
-      {/* <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{ flexWrap: 'wrap', gap: 1 }}
+      >
         <Typography variant="body2" sx={{ opacity: 0.8 }}>
           Test:
         </Typography>
@@ -274,11 +287,15 @@ export function HomePage() {
           size="small"
           variant="outlined"
           onClick={handleOpenSubscriptionByGroupId}
-          disabled={!testGroupId.trim() || !Number.isInteger(Number(testGroupId.trim())) || Number(testGroupId.trim()) <= 0}
+          disabled={
+            !testGroupId.trim() ||
+            !Number.isInteger(Number(testGroupId.trim())) ||
+            Number(testGroupId.trim()) <= 0
+          }
         >
           Open as subscriber
         </Button>
-      </Stack> */}
+      </Stack>
 
       {/* Actions notification banner */}
       {allActions.totalActions > 0 && (
