@@ -72,7 +72,7 @@ export function SubscribeModal({
 
   const { value: balance } = useQortBalance();
 
-  const totalAmount = unitAmount * intervalCount;
+  const totalAmount = +((unitAmount * intervalCount).toFixed(8));
 
   const totalRequired =
     paymentFee !== null && publishFee !== null && (isRenewal || joinGroupFee !== null)

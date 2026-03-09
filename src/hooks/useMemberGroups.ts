@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGlobal } from 'qapp-core';
-import type { GroupAccessType, GroupApiItem, MemberGroup } from '../types/subscription';
+import type {
+  GroupAccessType,
+  GroupApiItem,
+  MemberGroup,
+} from '../types/subscription';
 
 function coerceAccessType(group: GroupApiItem): GroupAccessType | null {
   // We treat any non-open group as "private" for this app.

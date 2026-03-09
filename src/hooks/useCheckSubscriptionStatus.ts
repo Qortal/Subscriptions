@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
-import { getPendingSubscribeActionByGroup } from '../lib/pendingTransactionsCache';
+import { getPendingSubscribeActionByGroup, getPendingLeaveGroup } from '../lib/pendingTransactionsCache';
 import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
 import {
   getPaidIntervalsFromAmount,
@@ -63,6 +63,20 @@ export function useCheckSubscriptionStatus(
           auth?.address && groupId !== null
             ? getPendingSubscribeActionByGroup(auth.address, groupId)
             : null;
+
+        // If there's a pending leave group action, treat as not-subscribed immediately
+        const pendingLeave =
+          auth?.address && groupId !== null
+            ? getPendingLeaveGroup(auth.address, groupId)
+            : null;
+        if (pendingLeave) {
+          if (!cancelled) {
+            setIsOwner(false);
+            setStatus('not-subscribed');
+            setLoading(false);
+          }
+          return;
+        }
 
         // If user has just completed a subscription (all steps done), treat as subscribed
         if (

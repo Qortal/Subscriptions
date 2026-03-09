@@ -28,11 +28,13 @@ const CACHE_KEY_PREFIX = 'qortal_subscriptions_pending_';
 const CACHE_KEY_SUBSCRIPTIONS = `${CACHE_KEY_PREFIX}subscriptions`;
 const CACHE_KEY_SUBSCRIBE_ACTIONS = `${CACHE_KEY_PREFIX}subscribe_actions`;
 const CACHE_KEY_OWNER_ACTIONS = `${CACHE_KEY_PREFIX}owner_actions`;
+const CACHE_KEY_LEAVE_GROUP = `${CACHE_KEY_PREFIX}leave_group`;
 
 // Cache expiration times (in milliseconds)
 const CACHE_EXPIRATION_SUBSCRIPTION = 3 * 60 * 1000; // 3 minutes
 const CACHE_EXPIRATION_SUBSCRIBE_ACTION = 3 * 60 * 1000; // 3 minutes
 const CACHE_EXPIRATION_OWNER_ACTION = 2 * 60 * 1000; // 2 minutes (for re-encrypt actions)
+const CACHE_EXPIRATION_LEAVE_GROUP = 3 * 60 * 1000; // 3 minutes
 
 // Type definitions
 export type PendingSubscription = {
@@ -76,6 +78,13 @@ export type PendingOwnerAction = {
   expiresAt: number;
 };
 
+export type PendingLeaveGroup = {
+  subscriberAddress: string;
+  groupId: number;
+  timestamp: number;
+  expiresAt: number;
+};
+
 // Reactive atoms for cache storage
 export const pendingSubscriptionsAtom = atomWithStorage<PendingSubscription[]>(
   CACHE_KEY_SUBSCRIPTIONS,
@@ -89,6 +98,11 @@ export const pendingSubscribeActionsAtom = atomWithStorage<PendingSubscribeActio
 
 export const pendingOwnerActionsAtom = atomWithStorage<PendingOwnerAction[]>(
   CACHE_KEY_OWNER_ACTIONS,
+  []
+);
+
+export const pendingLeaveGroupAtom = atomWithStorage<PendingLeaveGroup[]>(
+  CACHE_KEY_LEAVE_GROUP,
   []
 );
 
@@ -456,6 +470,61 @@ export function clearPendingOwnerActionsByGroup(groupId: number): void {
   setCacheItem(CACHE_KEY_OWNER_ACTIONS, filtered);
 }
 
+// ========== Leave Group Caching ==========
+
+/**
+ * Cache a pending leave group action so the UI optimistically reflects the user as not-subscribed
+ */
+export function cachePendingLeaveGroup(
+  action: Omit<PendingLeaveGroup, 'timestamp' | 'expiresAt'>
+): void {
+  const items = getCacheItem<PendingLeaveGroup>(CACHE_KEY_LEAVE_GROUP);
+  const filtered = items.filter(
+    (item) =>
+      !(item.subscriberAddress === action.subscriberAddress && item.groupId === action.groupId)
+  );
+  const now = Date.now();
+  filtered.push({
+    ...action,
+    timestamp: now,
+    expiresAt: now + CACHE_EXPIRATION_LEAVE_GROUP,
+  });
+  setCacheItem(CACHE_KEY_LEAVE_GROUP, removeExpiredItems(filtered));
+}
+
+/**
+ * Check if there is a pending leave group action for the given user and group
+ */
+export function getPendingLeaveGroup(
+  subscriberAddress: string,
+  groupId: number
+): PendingLeaveGroup | null {
+  const items = removeExpiredItems(
+    getCacheItem<PendingLeaveGroup>(CACHE_KEY_LEAVE_GROUP)
+  );
+  setCacheItem(CACHE_KEY_LEAVE_GROUP, items);
+  return (
+    items.find(
+      (item) => item.subscriberAddress === subscriberAddress && item.groupId === groupId
+    ) ?? null
+  );
+}
+
+/**
+ * Clear pending leave group action once confirmed on-chain
+ */
+export function clearPendingLeaveGroup(
+  subscriberAddress: string,
+  groupId: number
+): void {
+  const items = getCacheItem<PendingLeaveGroup>(CACHE_KEY_LEAVE_GROUP);
+  const filtered = items.filter(
+    (item) =>
+      !(item.subscriberAddress === subscriberAddress && item.groupId === groupId)
+  );
+  setCacheItem(CACHE_KEY_LEAVE_GROUP, filtered);
+}
+
 // ========== Cleanup Utilities ==========
 
 /**
@@ -479,6 +548,12 @@ export function cleanupExpiredCache(): void {
     getCacheItem<PendingOwnerAction>(CACHE_KEY_OWNER_ACTIONS)
   );
   setCacheItem(CACHE_KEY_OWNER_ACTIONS, ownerActions);
+
+  // Cleanup leave group actions
+  const leaveGroupActions = removeExpiredItems(
+    getCacheItem<PendingLeaveGroup>(CACHE_KEY_LEAVE_GROUP)
+  );
+  setCacheItem(CACHE_KEY_LEAVE_GROUP, leaveGroupActions);
 }
 
 /**
@@ -488,4 +563,5 @@ export function clearAllCache(): void {
   localStorage.removeItem(CACHE_KEY_SUBSCRIPTIONS);
   localStorage.removeItem(CACHE_KEY_SUBSCRIBE_ACTIONS);
   localStorage.removeItem(CACHE_KEY_OWNER_ACTIONS);
+  localStorage.removeItem(CACHE_KEY_LEAVE_GROUP);
 }

@@ -550,7 +550,7 @@ export function ManageSubscriptionPage() {
 
     try {
       setKickingUser(address);
-      await kickFromGroup(groupId, address, 'Payment overdue');
+      await kickFromGroup(groupId, address);
 
       // Add to pending owner actions atom (reactive)
       if (auth?.address) {
@@ -1475,7 +1475,8 @@ export function ManageSubscriptionPage() {
           <Dialog
             open={joinModalOpen}
             onClose={(_event, reason) => {
-              if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+              if (reason === 'backdropClick' || reason === 'escapeKeyDown')
+                return;
               handleCloseJoinModal();
             }}
             maxWidth="md"

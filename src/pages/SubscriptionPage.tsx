@@ -5,6 +5,10 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   List,
@@ -24,6 +28,7 @@ import {
   sendSubscriptionPayment,
   publishSubscriptionRecord,
   sendJoinGroupRequest,
+  leaveGroup,
 } from '../lib/subscriptionPayment';
 import { SubscribeModal } from '../components/SubscribeModal';
 import { useCheckSubscriptionStatus } from '../hooks/useCheckSubscriptionStatus';
@@ -40,6 +45,7 @@ import {
 import {
   cachePendingSubscribeAction,
   updatePendingSubscribeAction,
+  cachePendingLeaveGroup,
 } from '../lib/pendingTransactionsCache';
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
 import { resolvePaymentIndexIdentifierForPublish } from '../lib/resolvePaymentIndexIdentifier';
@@ -123,6 +129,8 @@ export function SubscriptionPage() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
   const [justSubscribed, setJustSubscribed] = useState(false);
+  const [leaveGroupDialogOpen, setLeaveGroupDialogOpen] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
 
   // Fetch group information
   const { groupName, loading: groupLoading } = useGroupInfo(
@@ -370,6 +378,28 @@ export function SubscriptionPage() {
     });
   };
 
+  const handleLeaveGroup = async () => {
+    if (!item || !auth?.address) return;
+    setLeavingGroup(true);
+    try {
+      await leaveGroup(item.groupId);
+      cachePendingLeaveGroup({
+        subscriberAddress: auth.address,
+        groupId: item.groupId,
+      });
+      setLeaveGroupDialogOpen(false);
+      setJustSubscribed(false);
+      setSnackbarMsg('You have left the group.');
+      setSnackbarOpen(true);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (e: any) {
+      setSnackbarMsg(e?.message ?? 'Failed to leave group');
+      setSnackbarOpen(true);
+    } finally {
+      setLeavingGroup(false);
+    }
+  };
+
   const handleSubscribeComplete = () => {
     setSnackbarMsg('Successfully subscribed!');
     setSnackbarOpen(true);
@@ -589,21 +619,40 @@ export function SubscriptionPage() {
                         </Typography>
                       </Box>
                     )}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => setLeaveGroupDialogOpen(true)}
+                      sx={{ mt: 0.5 }}
+                    >
+                      Leave Group
+                    </Button>
                   </Stack>
                 ) : showRenewCta ? (
-                  <Button
-                    size="large"
-                    variant="contained"
-                    color="error"
-                    onClick={handleOpenSubscribeModal}
-                    disabled={checkingSubscription}
-                  >
-                    {checkingSubscription
-                      ? 'Checking...'
-                      : isExpired
-                        ? 'Pay subscription'
-                        : '⚠ Payment Required'}
-                  </Button>
+                  <Stack spacing={1}>
+                    <Button
+                      size="large"
+                      variant="contained"
+                      color="error"
+                      onClick={handleOpenSubscribeModal}
+                      disabled={checkingSubscription}
+                    >
+                      {checkingSubscription
+                        ? 'Checking...'
+                        : isExpired
+                          ? 'Pay subscription'
+                          : '⚠ Payment Required'}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => setLeaveGroupDialogOpen(true)}
+                    >
+                      Leave Group
+                    </Button>
+                  </Stack>
                 ) : (
                   <Button
                     size="large"
@@ -681,6 +730,46 @@ export function SubscriptionPage() {
         onComplete={handleSubscribeComplete}
         isRenewal={showRenewCta}
       />
+
+      {/* Leave Group confirmation dialog */}
+      <Dialog
+        open={leaveGroupDialogOpen}
+        onClose={() => !leavingGroup && setLeaveGroupDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6" fontWeight={800}>
+            Leave Group
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to leave this group?
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8, mt: 1 }}>
+            Leaving the group means leaving the subscription. You will lose
+            access to all group content and benefits. This action cannot be
+            undone — you would need to re-subscribe to regain access.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setLeaveGroupDialogOpen(false)}
+            disabled={leavingGroup}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleLeaveGroup}
+            disabled={leavingGroup}
+          >
+            {leavingGroup ? 'Leaving...' : 'Confirm Leave'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbarOpen}
