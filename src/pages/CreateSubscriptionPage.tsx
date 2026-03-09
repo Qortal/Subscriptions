@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useGlobal, usePublish } from 'qapp-core';
 import { useOwnedGroups } from '../hooks/useOwnedGroups';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
@@ -48,6 +49,7 @@ function roundTo2(value: number) {
 
 export function CreateSubscriptionPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation(['core']);
   const { auth, identifierOperations, lists } = useGlobal();
   const { publishMultipleResources } = usePublish();
   const { ownedGroups, loading, error } = useOwnedGroups();
@@ -184,7 +186,7 @@ export function CreateSubscriptionPage() {
     [form]
   );
 
-  const steps = ['Choose group', 'Pricing rules', 'Details & publish'];
+  const steps = [t('core:create_step_choose_group'), t('core:create_step_pricing'), t('core:create_step_details')];
 
   const graceOptions = [GRACE_20_MIN_DAYS, 3, 5, 7] as const;
 
@@ -282,11 +284,11 @@ export function CreateSubscriptionPage() {
       // Success - data is now published and cached in lists
       // No need to update global state - hooks will fetch fresh data
 
-      setSnackbarMsg('Subscription published.');
+      setSnackbarMsg(t('core:create_snackbar_created'));
       setSnackbarOpen(true);
       navigate(`/manage/${group.groupId}`);
     } catch (e: any) {
-      setSnackbarMsg(e?.message ?? 'Failed to create subscription');
+      setSnackbarMsg(e?.message ?? t('core:create_snackbar_failed'));
       setSnackbarOpen(true);
     } finally {
       setIsPublishing(false);
@@ -297,24 +299,23 @@ export function CreateSubscriptionPage() {
     <Stack spacing={2.5}>
       <Box>
         <Button size="small" onClick={() => navigate('/')}>
-          ← Home
+          {t('core:create_home_btn')}
         </Button>
       </Box>
 
       <Stack spacing={0.5}>
         <Typography variant="h4" fontWeight={900}>
-          Create subscription
+          {t('core:create_title')}
         </Typography>
         <Typography sx={{ opacity: 0.8 }}>
-          Step 1: choose a private group + publish subscription information.
+          {t('core:create_step_intro')}
         </Typography>
       </Stack>
 
       {error ? <Alert severity="warning">{error}</Alert> : null}
       {!loading && !managedLoading && ownedGroups.length === 0 ? (
         <Alert severity="warning">
-          No owned private groups found. Create a private group first, then come
-          back here.
+          {t('core:create_no_owned_groups')}
         </Alert>
       ) : null}
       {!loading &&
@@ -322,8 +323,7 @@ export function CreateSubscriptionPage() {
       ownedGroups.length > 0 &&
       availableGroups.length === 0 ? (
         <Alert severity="info">
-          All your owned private groups already have subscriptions. You can
-          manage them from the "Subscription I manage" tab on the home page.
+          {t('core:create_all_have_subscriptions')}
         </Alert>
       ) : null}
 
@@ -342,7 +342,7 @@ export function CreateSubscriptionPage() {
           {activeStep === 0 ? (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={800}>
-                Choose an owned private group
+                {t('core:create_choose_group_title')}
               </Typography>
 
               <FormControl
@@ -351,10 +351,10 @@ export function CreateSubscriptionPage() {
                   loading || managedLoading || availableGroups.length === 0
                 }
               >
-                <InputLabel id="group-label">Private group</InputLabel>
+                <InputLabel id="group-label">{t('core:create_private_group')}</InputLabel>
                 <Select
                   labelId="group-label"
-                  label="Private group"
+                  label={t('core:create_private_group')}
                   value={groupId}
                   onChange={(e) => setGroupId(Number(e.target.value))}
                 >
@@ -368,7 +368,7 @@ export function CreateSubscriptionPage() {
                       if (typeof id !== 'number' || !Number.isFinite(id))
                         return null;
                       const name =
-                        g?.groupName ?? g?.name ?? g?.group ?? 'Unnamed group';
+                        g?.groupName ?? g?.name ?? g?.group ?? t('core:create_unnamed_group');
                       return (
                         <MenuItem key={id} value={id}>
                           {String(name)} (#{id})
@@ -380,8 +380,7 @@ export function CreateSubscriptionPage() {
               </FormControl>
 
               <Alert severity="info">
-                Subscribers will need to be in this group to access your gated
-                content.
+                {t('core:create_subscribers_need_group')}
               </Alert>
             </Stack>
           ) : null}
@@ -390,7 +389,7 @@ export function CreateSubscriptionPage() {
             <Stack spacing={2}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Price (QORT)"
+                  label={t('core:create_price_qort')}
                   type="number"
                   value={amountQortInput}
                   onChange={(e) => {
@@ -402,42 +401,42 @@ export function CreateSubscriptionPage() {
                   onBlur={() => {
                     setAmountQortInput(String(amountQort));
                   }}
-                  helperText="Min 1 QORT, up to 2 decimals"
+                  helperText={t('core:create_min_qort')}
                   inputProps={{ min: 1, step: 0.01 }}
                   fullWidth
                 />
                 <FormControl fullWidth>
-                  <InputLabel id="interval-label">Billing Interval</InputLabel>
+                  <InputLabel id="interval-label">{t('core:create_billing_interval')}</InputLabel>
                   <Select
                     labelId="interval-label"
-                    label="Billing Interval"
+                    label={t('core:create_billing_interval')}
                     value={intervalDays}
                     onChange={(e) => setIntervalDays(Number(e.target.value))}
                   >
                     <MenuItem value={HOURLY_INTERVAL_DAYS}>
-                      Hourly (for testing)
+                      {t('core:create_hourly_testing')}
                     </MenuItem>
-                    <MenuItem value={1}>Daily (1 day)</MenuItem>
-                    <MenuItem value={30}>Monthly (30 days)</MenuItem>
+                    <MenuItem value={1}>{t('core:create_daily_1')}</MenuItem>
+                    <MenuItem value={30}>{t('core:create_monthly_30')}</MenuItem>
                   </Select>
                 </FormControl>
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <FormControl fullWidth>
-                  <InputLabel id="grace-label">Grace Period</InputLabel>
+                  <InputLabel id="grace-label">{t('core:create_grace_period')}</InputLabel>
                   <Select
                     labelId="grace-label"
-                    label="Grace Period"
+                    label={t('core:create_grace_period')}
                     value={graceDays}
                     onChange={(e) => setGraceDays(Number(e.target.value))}
                   >
                     <MenuItem value={GRACE_20_MIN_DAYS}>
-                      20 min (for testing)
+                      {t('core:create_20_min_testing')}
                     </MenuItem>
                     {[3, 5, 7].map((d) => (
                       <MenuItem key={d} value={d}>
-                        {d} days
+                        {t('core:create_days', { count: d })}
                       </MenuItem>
                     ))}
                   </Select>
@@ -445,14 +444,10 @@ export function CreateSubscriptionPage() {
               </Stack>
 
               <Alert severity="info">
-                Subscription with{' '}
-                {intervalDays === HOURLY_INTERVAL_DAYS
-                  ? 'hourly'
-                  : intervalDays === 1
-                    ? 'daily'
-                    : 'monthly'}{' '}
-                billing and a {graceDays < 0.1 ? '20-min' : `${graceDays}-day`}{' '}
-                grace period after payment is due.
+                {t('core:create_billing_grace_info', {
+                  interval: intervalDays === HOURLY_INTERVAL_DAYS ? 'hourly' : intervalDays === 1 ? 'daily' : 'monthly',
+                  grace: graceDays < 0.1 ? '20-min' : `${graceDays}-day`,
+                })}
               </Alert>
             </Stack>
           ) : null}
@@ -460,18 +455,18 @@ export function CreateSubscriptionPage() {
           {activeStep === 2 ? (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={800}>
-                Full details (QDN publish)
+                {t('core:create_full_details_title')}
               </Typography>
 
               <TextField
-                label="Title"
+                label={t('core:create_title_label')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 fullWidth
               />
 
               <TextField
-                label="Description"
+                label={t('core:create_description_label')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 fullWidth
@@ -480,7 +475,7 @@ export function CreateSubscriptionPage() {
               />
 
               <TextField
-                label="What you get (one perk per line)"
+                label={t('core:create_perks_label')}
                 value={perksText}
                 onChange={(e) => setPerksText(e.target.value)}
                 fullWidth
@@ -498,7 +493,7 @@ export function CreateSubscriptionPage() {
               disabled={activeStep === 0}
               onClick={() => setActiveStep((s) => Math.max(0, s - 1))}
             >
-              Back
+              {t('core:create_back')}
             </Button>
 
             {activeStep < steps.length - 1 ? (
@@ -509,7 +504,7 @@ export function CreateSubscriptionPage() {
                   setActiveStep((s) => Math.min(steps.length - 1, s + 1))
                 }
               >
-                Continue
+                {t('core:create_continue')}
               </Button>
             ) : (
               <Button
@@ -517,7 +512,7 @@ export function CreateSubscriptionPage() {
                 disabled={!canContinue || isPublishing}
                 onClick={handlePublish}
               >
-                {isPublishing ? 'Publishing…' : 'Publish & create'}
+                {isPublishing ? t('core:create_publishing') : t('core:create_publish_btn')}
               </Button>
             )}
           </Stack>

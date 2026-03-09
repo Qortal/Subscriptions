@@ -33,6 +33,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAtom } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useInitializeManagedSubscriptions } from '../hooks/useInitializeManagedSubscriptions';
 import {
   objectToBase64,
@@ -77,14 +78,15 @@ function getGroupId(group: AnyGroup): number | null {
   return null;
 }
 
-function getGroupName(group: AnyGroup): string {
+function getGroupName(group: AnyGroup, unnamedLabel = 'Unnamed group'): string {
   const name = group?.groupName;
   if (name) return String(name);
-  return 'Unnamed group';
+  return unnamedLabel;
 }
 
 export function ManageSubscriptionPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation(['core']);
   const { groupId: groupIdParam } = useParams();
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -286,7 +288,7 @@ export function ManageSubscriptionPage() {
         }
       } catch (e: any) {
         if (!cancelled) {
-          setDetailsError(e?.message ?? 'Failed to load subscription details');
+          setDetailsError(e?.message ?? t('core:manage_error_load_details'));
         }
       } finally {
         if (!cancelled) setDetailsLoading(false);
@@ -385,7 +387,7 @@ export function ManageSubscriptionPage() {
 
   async function handleSaveChanges() {
     if (!details || !subscriptionId || !auth?.name || !identifierOperations) {
-      showError('Missing required data to save changes');
+      showError(t('core:manage_error_missing_data'));
       return;
     }
 
@@ -437,11 +439,11 @@ export function ManageSubscriptionPage() {
       }
 
       const msg = result.pricingChanged
-        ? 'Subscription updated! A new pricing version was created.'
-        : 'Subscription updated!';
+        ? t('core:manage_success_updated_pricing')
+        : t('core:manage_success_updated');
       showSuccess(msg);
     } catch (e: any) {
-      showError(e?.message ?? 'Failed to save changes');
+      showError(e?.message ?? t('core:manage_error_save'));
     } finally {
       setIsSaving(false);
     }
@@ -449,7 +451,7 @@ export function ManageSubscriptionPage() {
 
   async function handleInviteUser(address: string) {
     if (groupId === null) {
-      showError('Invalid group ID');
+      showError(t('core:manage_error_invalid_group'));
       return;
     }
 
@@ -484,7 +486,7 @@ export function ManageSubscriptionPage() {
       }
 
       showSuccess(
-        `Successfully invited ${getDisplayName(address)} to the group!`
+        t('core:manage_success_invited', { name: getDisplayName(address) })
       );
 
       // Refresh data after a short delay
@@ -492,7 +494,7 @@ export function ManageSubscriptionPage() {
         setRefreshKey((prev) => prev + 1);
       }, 2000);
     } catch (e: any) {
-      showError(e?.message ?? 'Failed to invite user');
+      showError(e?.message ?? t('core:manage_error_invite'));
     } finally {
       setInvitingUser(null);
     }
@@ -500,7 +502,7 @@ export function ManageSubscriptionPage() {
 
   async function handleReencryptGroupKeys() {
     if (groupId === null) {
-      showError('Invalid group ID');
+      showError(t('core:manage_error_invalid_group'));
       return;
     }
 
@@ -534,9 +536,9 @@ export function ManageSubscriptionPage() {
         });
       }
 
-      showSuccess('Successfully re-encrypted group keys!');
+      showSuccess(t('core:manage_success_reencrypted'));
     } catch (e: any) {
-      showError(e?.message ?? 'Failed to re-encrypt group keys');
+      showError(e?.message ?? t('core:manage_error_reencrypt'));
     } finally {
       setIsReencrypting(false);
     }
@@ -544,7 +546,7 @@ export function ManageSubscriptionPage() {
 
   async function handleKickMember(address: string) {
     if (groupId === null) {
-      showError('Invalid group ID');
+      showError(t('core:manage_error_invalid_group'));
       return;
     }
 
@@ -579,7 +581,7 @@ export function ManageSubscriptionPage() {
       }
 
       showSuccess(
-        `Successfully kicked ${getDisplayName(address)} from the group!`
+        t('core:manage_success_kicked', { name: getDisplayName(address) })
       );
 
       // Refresh data after a short delay
@@ -587,7 +589,7 @@ export function ManageSubscriptionPage() {
         setRefreshKey((prev) => prev + 1);
       }, 2000);
     } catch (e: any) {
-      showError(e?.message ?? 'Failed to kick member');
+      showError(e?.message ?? t('core:manage_error_kick'));
     } finally {
       setKickingUser(null);
     }
@@ -669,7 +671,7 @@ export function ManageSubscriptionPage() {
 
   async function handleToggleStatus() {
     if (!details || !subscriptionId || !auth?.name || !identifierOperations) {
-      showError('Missing required data to toggle status');
+      showError(t('core:manage_error_toggle_missing'));
       return;
     }
 
@@ -704,7 +706,7 @@ export function ManageSubscriptionPage() {
       setStatus(newStatus);
       setDetails(updatedDetails);
       showSuccess(
-        `Subscription ${newStatus === 'disabled' ? 'disabled' : 're-enabled'}!`
+        newStatus === 'disabled' ? t('core:manage_success_disabled') : t('core:manage_success_reenabled')
       );
 
       // Refresh after a short delay
@@ -712,7 +714,7 @@ export function ManageSubscriptionPage() {
         setRefreshKey((prev) => prev + 1);
       }, 1000);
     } catch (e: any) {
-      showError(e?.message ?? 'Failed to update status');
+      showError(e?.message ?? t('core:manage_error_toggle'));
     } finally {
       setIsTogglingStatus(false);
     }
@@ -743,7 +745,7 @@ export function ManageSubscriptionPage() {
       <Stack spacing={2.5}>
         <Box>
           <Button size="small" onClick={() => navigate('/')}>
-            ← Home
+            {t('core:manage_home_btn')}
           </Button>
         </Box>
 
@@ -777,21 +779,21 @@ export function ManageSubscriptionPage() {
     return (
       <Stack spacing={2}>
         <Typography variant="h5" fontWeight={800}>
-          Managed subscription not found
+          {t('core:manage_not_found')}
         </Typography>
         <Typography sx={{ opacity: 0.85 }}>
-          {managedError ?? 'Could not find that managed subscription.'}
+          {managedError ?? t('core:manage_could_not_find')}
         </Typography>
         <Box>
           <Button variant="contained" onClick={() => navigate('/')}>
-            Back to home
+            {t('core:manage_back_home')}
           </Button>
         </Box>
       </Stack>
     );
   }
 
-  const displayTitle = title || getGroupName(groupInfo);
+  const displayTitle = title || getGroupName(groupInfo, t('core:manage_unnamed_group'));
   // Subscriber count should exclude the owner
   const subscriberCount = displayMembers.length;
   const paidCount = paidMembersCount;
@@ -803,10 +805,10 @@ export function ManageSubscriptionPage() {
 
   const revenueLabel =
     intervalDays === HOURLY_INTERVAL_DAYS
-      ? 'QORT/hr'
+      ? t('core:manage_qort_hr')
       : intervalDays === 1
-        ? 'QORT/day'
-        : 'QORT/mo';
+        ? t('core:manage_qort_day')
+        : t('core:manage_qort_mo');
 
   const countdownMins = Math.floor(countdown / 60);
   const countdownSecs = String(countdown % 60).padStart(2, '0');
@@ -817,9 +819,9 @@ export function ManageSubscriptionPage() {
     <Stack spacing={2.5}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Button size="small" onClick={() => navigate('/')}>
-          ← Home
+          {t('core:manage_home_btn')}
         </Button>
-        <Tooltip title="Refresh subscription data">
+        <Tooltip title={t('core:manage_refresh_tooltip')}>
           <IconButton
             onClick={handleRefresh}
             disabled={membersLoading || joinRequestsLoading || paymentsLoading}
@@ -832,24 +834,24 @@ export function ManageSubscriptionPage() {
 
       <Stack spacing={1}>
         <Typography variant="h4" fontWeight={900}>
-          Manage: {displayTitle}
+          {t('core:manage_title', { title: displayTitle })}
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip label={`${subscriberCount} subscribers`} variant="outlined" />
+          <Chip label={t('core:manage_subscribers', { count: subscriberCount })} variant="outlined" />
           <Chip
-            label={`${paidCount} paid`}
+            label={t('core:manage_paid', { count: paidCount })}
             variant="outlined"
             color="success"
           />
           {graceCount > 0 && (
             <Chip
-              label={`${graceCount} grace period`}
+              label={t('core:manage_grace_period', { count: graceCount })}
               variant="outlined"
               color="warning"
             />
           )}
           <Chip
-            label={`${unpaidCount} unpaid`}
+            label={t('core:manage_unpaid', { count: unpaidCount })}
             variant="outlined"
             color={unpaidCount > 0 ? 'error' : 'default'}
           />
@@ -859,8 +861,8 @@ export function ManageSubscriptionPage() {
 
       <Alert severity="info">
         {detailsError
-          ? `Details load warning: ${detailsError}`
-          : 'Edit your subscription details below and save changes.'}
+          ? t('core:manage_details_warning', { message: detailsError })
+          : t('core:manage_edit_below')}
       </Alert>
 
       {shouldReEncryptGroupKeys && (
@@ -873,23 +875,21 @@ export function ManageSubscriptionPage() {
               onClick={handleReencryptGroupKeys}
               disabled={isReencrypting}
             >
-              {isReencrypting ? 'Re-encrypting...' : 'Re-encrypt Keys'}
+              {isReencrypting ? t('core:manage_reencrypting') : t('core:manage_reencrypt_keys')}
             </Button>
           }
         >
-          The group encryption keys need to be updated. Please update the group
-          keys to ensure all members have proper access.
+          {t('core:manage_keys_need_update')}
         </Alert>
       )}
 
       {status === 'disabled' && (
         <Alert severity="warning">
           <Typography variant="body2" fontWeight={600}>
-            This subscription is disabled
+            {t('core:manage_subscription_disabled_title')}
           </Typography>
           <Typography variant="body2" sx={{ mt: 0.5 }}>
-            New users cannot subscribe, but existing members retain access.
-            Re-enable to accept new subscribers.
+            {t('core:manage_subscription_disabled_body')}
           </Typography>
         </Alert>
       )}
@@ -899,12 +899,12 @@ export function ManageSubscriptionPage() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" fontWeight={800}>
-                Subscription details
+                {t('core:manage_subscription_details')}
               </Typography>
 
               <Stack spacing={1.5} sx={{ mt: 2 }}>
                 <TextField
-                  label="Title"
+                  label={t('core:manage_title_label')}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   fullWidth
@@ -912,7 +912,7 @@ export function ManageSubscriptionPage() {
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                   <TextField
-                    label="Price (QORT)"
+                    label={t('core:manage_price_qort')}
                     type="number"
                     value={priceQortInput}
                     onChange={(e) => setPriceQortInput(e.target.value)}
@@ -928,54 +928,54 @@ export function ManageSubscriptionPage() {
                   />
                   <FormControl fullWidth>
                     <InputLabel id="interval-label">
-                      Billing Interval
+                      {t('core:manage_billing_interval')}
                     </InputLabel>
                     <Select
                       labelId="interval-label"
-                      label="Billing Interval"
+                      label={t('core:manage_billing_interval')}
                       value={intervalDays}
                       onChange={(e) => setIntervalDays(Number(e.target.value))}
                     >
                       <MenuItem value={HOURLY_INTERVAL_DAYS}>
-                        Hourly (for testing)
+                        {t('core:manage_hourly_testing')}
                       </MenuItem>
-                      <MenuItem value={1}>Daily (1 day)</MenuItem>
-                      <MenuItem value={30}>Monthly (30 days)</MenuItem>
+                      <MenuItem value={1}>{t('core:manage_daily_1')}</MenuItem>
+                      <MenuItem value={30}>{t('core:manage_monthly_30')}</MenuItem>
                     </Select>
                   </FormControl>
                 </Stack>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                   <FormControl fullWidth>
-                    <InputLabel id="grace-label">Grace Period</InputLabel>
+                    <InputLabel id="grace-label">{t('core:manage_grace_period_label')}</InputLabel>
                     <Select
                       labelId="grace-label"
-                      label="Grace Period"
+                      label={t('core:manage_grace_period_label')}
                       value={graceDays}
                       onChange={(e) => setGraceDays(Number(e.target.value))}
                     >
                       {![GRACE_20_MIN_DAYS, 3, 5, 7].includes(graceDays) &&
                         (graceDays < 0.1 ? (
                           <MenuItem value={graceDays}>
-                            {Math.round(graceDays * 24 * 60)} min
+                            {Math.round(graceDays * 24 * 60)} {t('core:manage_min_abbr')}
                           </MenuItem>
                         ) : (
                           <MenuItem value={graceDays}>
-                            {graceDays} days
+                            {t('core:manage_days', { count: graceDays })}
                           </MenuItem>
                         ))}
                       <MenuItem value={GRACE_20_MIN_DAYS}>
-                        20 min (for testing)
+                        {t('core:manage_20_min_testing')}
                       </MenuItem>
-                      <MenuItem value={3}>3 days</MenuItem>
-                      <MenuItem value={5}>5 days</MenuItem>
-                      <MenuItem value={7}>7 days</MenuItem>
+                      <MenuItem value={3}>{t('core:manage_days', { count: 3 })}</MenuItem>
+                      <MenuItem value={5}>{t('core:manage_days', { count: 5 })}</MenuItem>
+                      <MenuItem value={7}>{t('core:manage_days', { count: 7 })}</MenuItem>
                     </Select>
                   </FormControl>
                 </Stack>
 
                 <TextField
-                  label="Description"
+                  label={t('core:manage_description_label')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   fullWidth
@@ -985,7 +985,7 @@ export function ManageSubscriptionPage() {
 
                 <Box>
                   <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    What subscribers get (Perks)
+                    {t('core:manage_perks_title')}
                   </Typography>
                   <Stack spacing={1}>
                     {perks.map((perk, index) => (
@@ -1002,7 +1002,7 @@ export function ManageSubscriptionPage() {
                           }
                           fullWidth
                           size="small"
-                          placeholder="Perk description"
+                          placeholder={t('core:manage_perk_placeholder')}
                         />
                         <IconButton
                           size="small"
@@ -1023,7 +1023,7 @@ export function ManageSubscriptionPage() {
                             handleAddPerk();
                           }
                         }}
-                        placeholder="Add a new perk..."
+                        placeholder={t('core:manage_add_perk_placeholder')}
                         size="small"
                         fullWidth
                       />
@@ -1033,7 +1033,7 @@ export function ManageSubscriptionPage() {
                         onClick={handleAddPerk}
                         disabled={!newPerk.trim()}
                       >
-                        Add
+                        {t('core:manage_add_btn')}
                       </Button>
                     </Stack>
                   </Stack>
@@ -1043,7 +1043,7 @@ export function ManageSubscriptionPage() {
 
                 <Box>
                   <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    Subscription Status
+                    {t('core:manage_status_title')}
                   </Typography>
                   <FormControlLabel
                     control={
@@ -1057,12 +1057,12 @@ export function ManageSubscriptionPage() {
                     label={
                       <Box>
                         <Typography variant="body2" fontWeight={600}>
-                          {status === 'active' ? 'Active' : 'Disabled'}
+                          {status === 'active' ? t('core:manage_status_active') : t('core:manage_status_disabled')}
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.7 }}>
                           {status === 'active'
-                            ? 'Accepting new subscribers'
-                            : 'Not accepting new subscribers nor payments.'}
+                            ? t('core:manage_accepting_new')
+                            : t('core:manage_not_accepting')}
                         </Typography>
                       </Box>
                     }
@@ -1077,7 +1077,7 @@ export function ManageSubscriptionPage() {
                     onClick={handleSaveChanges}
                     disabled={isSaving}
                   >
-                    {isSaving ? 'Saving...' : 'Save changes'}
+                    {isSaving ? t('core:manage_saving') : t('core:manage_save_changes')}
                   </Button>
                   <Button
                     variant="outlined"
@@ -1087,7 +1087,7 @@ export function ManageSubscriptionPage() {
                     }
                     disabled={!subscriptionId}
                   >
-                    View public page
+                    {t('core:manage_view_public_page')}
                   </Button>
                 </Stack>
               </Stack>
@@ -1105,14 +1105,14 @@ export function ManageSubscriptionPage() {
                 alignItems={{ xs: 'flex-start', sm: 'center' }}
               >
                 <Typography variant="h6" fontWeight={800}>
-                  Members ({subscriberCount})
+                  {t('core:manage_members_title', { count: subscriberCount })}
                   {paymentsLoading && (
                     <Typography
                       component="span"
                       variant="caption"
                       sx={{ ml: 1, opacity: 0.7 }}
                     >
-                      (validating payments...)
+                      {t('core:manage_validating_payments')}
                     </Typography>
                   )}
                 </Typography>
@@ -1124,7 +1124,7 @@ export function ManageSubscriptionPage() {
                       onChange={(e) => setShowUnpaidOnly(e.target.checked)}
                     />
                   }
-                  label="Unpaid only"
+                  label={t('core:manage_unpaid_only')}
                 />
               </Stack>
 
@@ -1132,23 +1132,23 @@ export function ManageSubscriptionPage() {
 
               {membersLoading && members.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
-                  Loading members...
+                  {t('core:manage_loading_members')}
                 </Typography>
               ) : filteredMembers.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
                   {showUnpaidOnly
-                    ? 'No unpaid members to show.'
-                    : 'No members to show.'}
+                    ? t('core:manage_no_unpaid')
+                    : t('core:manage_no_members')}
                 </Typography>
               ) : (
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Member</TableCell>
-                      <TableCell>Joined</TableCell>
-                      <TableCell align="right">Role</TableCell>
-                      <TableCell align="right">Status</TableCell>
-                      <TableCell align="right">Action</TableCell>
+                      <TableCell>{t('core:manage_table_member')}</TableCell>
+                      <TableCell>{t('core:manage_table_joined')}</TableCell>
+                      <TableCell align="right">{t('core:manage_table_role')}</TableCell>
+                      <TableCell align="right">{t('core:manage_table_status')}</TableCell>
+                      <TableCell align="right">{t('core:manage_table_action')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1190,14 +1190,14 @@ export function ManageSubscriptionPage() {
                             <TableCell align="right">
                               {m.isAdmin ? (
                                 <Chip
-                                  label="Admin"
+                                  label={t('core:manage_role_admin')}
                                   size="small"
                                   color="primary"
                                   variant="outlined"
                                 />
                               ) : (
                                 <Chip
-                                  label="Member"
+                                  label={t('core:manage_role_member')}
                                   size="small"
                                   variant="outlined"
                                 />
@@ -1208,9 +1208,9 @@ export function ManageSubscriptionPage() {
                                 label={
                                   m.isPaidUp
                                     ? m.isInGrace
-                                      ? 'Grace Period'
-                                      : 'Paid'
-                                    : 'Unpaid'
+                                      ? t('core:manage_status_grace')
+                                      : t('core:manage_status_paid')
+                                    : t('core:manage_status_unpaid')
                                 }
                                 size="small"
                                 color={
@@ -1235,7 +1235,7 @@ export function ManageSubscriptionPage() {
                                     handleKickMember(m.address);
                                   }}
                                 >
-                                  {isKicking ? 'Kicking...' : 'Kick'}
+                                  {isKicking ? t('core:manage_kicking') : t('core:manage_kick')}
                                 </Button>
                               )}
                             </TableCell>
@@ -1263,7 +1263,7 @@ export function ManageSubscriptionPage() {
                                       variant="caption"
                                       sx={{ opacity: 0.6, display: 'block' }}
                                     >
-                                      Last paid
+                                      {t('core:manage_last_paid')}
                                     </Typography>
                                     <Typography
                                       variant="body2"
@@ -1279,7 +1279,7 @@ export function ManageSubscriptionPage() {
                                       variant="caption"
                                       sx={{ opacity: 0.6, display: 'block' }}
                                     >
-                                      Amount paid
+                                      {t('core:manage_amount_paid')}
                                     </Typography>
                                     <Typography
                                       variant="body2"
@@ -1295,7 +1295,7 @@ export function ManageSubscriptionPage() {
                                       variant="caption"
                                       sx={{ opacity: 0.6, display: 'block' }}
                                     >
-                                      Pricing version
+                                      {t('core:manage_pricing_version')}
                                     </Typography>
                                     <Typography
                                       variant="body2"
@@ -1325,7 +1325,7 @@ export function ManageSubscriptionPage() {
                                       variant="caption"
                                       sx={{ opacity: 0.6, display: 'block' }}
                                     >
-                                      Subscription ends
+                                      {t('core:manage_subscription_ends')}
                                     </Typography>
                                     <Typography
                                       variant="body2"
@@ -1342,7 +1342,7 @@ export function ManageSubscriptionPage() {
                                         variant="caption"
                                         sx={{ opacity: 0.6, display: 'block' }}
                                       >
-                                        Payment TX
+                                        {t('core:manage_payment_tx')}
                                       </Typography>
                                       <Typography
                                         variant="body2"
@@ -1379,14 +1379,14 @@ export function ManageSubscriptionPage() {
                 alignItems={{ xs: 'flex-start', sm: 'center' }}
               >
                 <Typography variant="h6" fontWeight={800}>
-                  Join Requests ({filteredJoinRequests.length})
+                  {t('core:manage_join_requests_title', { count: filteredJoinRequests.length })}
                   {validatingJoinRequests && (
                     <Typography
                       component="span"
                       variant="caption"
                       sx={{ ml: 1, opacity: 0.7 }}
                     >
-                      (validating...)
+                      {t('core:manage_validating')}
                     </Typography>
                   )}
                 </Typography>
@@ -1397,7 +1397,7 @@ export function ManageSubscriptionPage() {
                     size="small"
                     onClick={handleOpenJoinModal}
                   >
-                    Review &amp; Accept Requests
+                    {t('core:manage_review_accept_requests')}
                   </Button>
                 )}
               </Stack>
@@ -1406,11 +1406,11 @@ export function ManageSubscriptionPage() {
 
               {joinRequestsLoading && joinRequests.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
-                  Loading join requests...
+                  {t('core:manage_loading_join_requests')}
                 </Typography>
               ) : filteredJoinRequests.length === 0 ? (
                 <Typography sx={{ opacity: 0.8 }}>
-                  No pending join requests.
+                  {t('core:manage_no_pending_requests')}
                 </Typography>
               ) : (
                 <Stack spacing={1}>
@@ -1442,8 +1442,8 @@ export function ManageSubscriptionPage() {
                           label={
                             validation
                               ? validation.isValid
-                                ? '✓ Valid'
-                                : '✗ Invalid'
+                                ? t('core:manage_valid')
+                                : t('core:manage_invalid')
                               : '…'
                           }
                           size="small"
@@ -1464,8 +1464,7 @@ export function ManageSubscriptionPage() {
 
               {filteredJoinRequests.length > 0 && (
                 <Alert severity="info" sx={{ mt: 2 }}>
-                  Only users who have paid and published their subscription
-                  record can be invited to the group.
+                  {t('core:manage_only_paid_published')}
                 </Alert>
               )}
             </CardContent>
@@ -1507,14 +1506,14 @@ export function ManageSubscriptionPage() {
                 <Box>
                   <Typography variant="h6" fontWeight={800}>
                     {joinModalStep === 1
-                      ? 'Accept Join Requests'
-                      : 'Re-encryption in Progress'}
+                      ? t('core:manage_accept_join_requests')
+                      : t('core:manage_reencryption_in_progress')}
                   </Typography>
                   <Typography
                     variant="caption"
                     sx={{ opacity: 0.6, display: 'block', mb: 1.5 }}
                   >
-                    Step {joinModalStep} of 2
+                    {t('core:manage_step_of', { step: joinModalStep })}
                   </Typography>
                 </Box>
                 {/* Close — only when nothing has been accepted yet */}
@@ -1553,25 +1552,25 @@ export function ManageSubscriptionPage() {
                 <Box sx={{ px: 3, py: 2.5 }}>
                   {acceptedInModal.length > 0 && (
                     <Alert severity="success" sx={{ mb: 2 }}>
-                      {acceptedInModal.length} request
-                      {acceptedInModal.length > 1 ? 's' : ''} accepted — click{' '}
-                      <strong>Continue</strong> when you're done.
+                      {acceptedInModal.length === 1
+                        ? t('core:manage_requests_accepted_continue', { count: acceptedInModal.length })
+                        : t('core:manage_requests_accepted_continue_plural', { count: acceptedInModal.length })}
                     </Alert>
                   )}
 
                   {filteredJoinRequests.length === 0 ? (
                     <Typography sx={{ opacity: 0.8, py: 2 }}>
-                      No pending join requests.
+                      {t('core:manage_no_pending_requests')}
                     </Typography>
                   ) : (
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Requester</TableCell>
-                          <TableCell align="center">Payment</TableCell>
-                          <TableCell align="center">Published</TableCell>
-                          <TableCell align="center">Status</TableCell>
-                          <TableCell align="right">Action</TableCell>
+                          <TableCell>{t('core:manage_table_requester')}</TableCell>
+                          <TableCell align="center">{t('core:manage_table_payment')}</TableCell>
+                          <TableCell align="center">{t('core:manage_table_published')}</TableCell>
+                          <TableCell align="center">{t('core:manage_table_status_col')}</TableCell>
+                          <TableCell align="right">{t('core:manage_table_action_col')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1613,7 +1612,7 @@ export function ManageSubscriptionPage() {
                                 {validation ? (
                                   <Chip
                                     label={
-                                      validation.hasPaid ? 'Paid' : 'Not Paid'
+                                      validation.hasPaid ? t('core:manage_status_paid') : t('core:manage_not_paid')
                                     }
                                     size="small"
                                     color={
@@ -1623,7 +1622,7 @@ export function ManageSubscriptionPage() {
                                   />
                                 ) : (
                                   <Chip
-                                    label="Checking..."
+                                    label={t('core:manage_checking')}
                                     size="small"
                                     variant="outlined"
                                   />
@@ -1634,8 +1633,8 @@ export function ManageSubscriptionPage() {
                                   <Chip
                                     label={
                                       validation.hasPublishedRecord
-                                        ? 'Yes'
-                                        : 'No'
+                                        ? t('core:manage_yes')
+                                        : t('core:manage_no')
                                     }
                                     size="small"
                                     color={
@@ -1647,7 +1646,7 @@ export function ManageSubscriptionPage() {
                                   />
                                 ) : (
                                   <Chip
-                                    label="Checking..."
+                                    label={t('core:manage_checking')}
                                     size="small"
                                     variant="outlined"
                                   />
@@ -1656,7 +1655,7 @@ export function ManageSubscriptionPage() {
                               <TableCell align="center">
                                 {wasAccepted ? (
                                   <Chip
-                                    label="✓ Accepted"
+                                    label={t('core:manage_accepted')}
                                     size="small"
                                     color="success"
                                     variant="filled"
@@ -1664,14 +1663,14 @@ export function ManageSubscriptionPage() {
                                 ) : validation ? (
                                   validation.isValid ? (
                                     <Chip
-                                      label="✓ Valid"
+                                      label={t('core:manage_valid')}
                                       size="small"
                                       color="success"
                                       variant="filled"
                                     />
                                   ) : (
                                     <Chip
-                                      label="✗ Invalid"
+                                      label={t('core:manage_invalid')}
                                       size="small"
                                       color="error"
                                       variant="outlined"
@@ -1701,7 +1700,7 @@ export function ManageSubscriptionPage() {
                                     handleInviteUserInModal(request.joiner)
                                   }
                                 >
-                                  {isInviting ? 'Accepting...' : 'Accept'}
+                                  {isInviting ? t('core:manage_accepting') : t('core:manage_accept_btn')}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -1723,14 +1722,14 @@ export function ManageSubscriptionPage() {
                       onClick={handleCloseJoinModal}
                       disabled={acceptedInModal.length > 0}
                     >
-                      Close
+                      {t('core:manage_close')}
                     </Button>
                     <Button
                       variant="contained"
                       disabled={acceptedInModal.length === 0}
                       onClick={() => setJoinModalStep(2)}
                     >
-                      Continue →
+                      {t('core:manage_continue_arrow')}
                     </Button>
                   </Stack>
                 </Box>
@@ -1802,28 +1801,16 @@ export function ManageSubscriptionPage() {
                   <Box sx={{ maxWidth: 420 }}>
                     <Typography variant="h6" fontWeight={800} gutterBottom>
                       {countdown === 0
-                        ? 'Ready to Re-encrypt!'
-                        : 'Waiting to Re-encrypt Group Keys'}
+                        ? t('core:manage_ready_reencrypt')
+                        : t('core:manage_waiting_reencrypt')}
                     </Typography>
                     <Typography
                       variant="body2"
                       sx={{ opacity: 0.75, lineHeight: 1.6 }}
                     >
-                      {countdown === 0 ? (
-                        <>
-                          The waiting period is over. You can now re-encrypt the
-                          group keys so the newly accepted members gain proper
-                          access.
-                        </>
-                      ) : (
-                        <>
-                          New members have been invited. Please wait while the
-                          network processes the changes — this takes about{' '}
-                          <strong>2.5 minutes</strong>. Do not close this
-                          window. After the timer ends you will need to
-                          re-encrypt the group keys.
-                        </>
-                      )}
+                      {countdown === 0
+                        ? t('core:manage_waiting_over')
+                        : t('core:manage_wait_2_5_min')}
                     </Typography>
                   </Box>
 
@@ -1838,7 +1825,7 @@ export function ManageSubscriptionPage() {
                         variant="caption"
                         sx={{ display: 'block', mt: 0.75, opacity: 0.55 }}
                       >
-                        {countdown}s remaining
+                        {t('core:manage_remaining', { count: countdown })}
                       </Typography>
                     </Box>
                   )}
@@ -1859,8 +1846,8 @@ export function ManageSubscriptionPage() {
                       sx={{ minWidth: 200, fontWeight: 700 }}
                     >
                       {isReencrypting
-                        ? 'Re-encrypting...'
-                        : 'Re-encrypt Keys Now'}
+                        ? t('core:manage_reencrypting')
+                        : t('core:manage_reencrypt_now')}
                     </Button>
                   )}
                 </Box>
@@ -1874,7 +1861,7 @@ export function ManageSubscriptionPage() {
               <Card variant="outlined" sx={{ mt: 2 }}>
                 <CardContent>
                   <Typography variant="h6" fontWeight={800}>
-                    Pricing History
+                    {t('core:manage_pricing_history')}
                   </Typography>
 
                   <Divider sx={{ my: 2 }} />
@@ -1882,10 +1869,10 @@ export function ManageSubscriptionPage() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Version</TableCell>
-                        <TableCell>Price</TableCell>
-                        <TableCell>Interval</TableCell>
-                        <TableCell>Effective From</TableCell>
+                        <TableCell>{t('core:manage_table_version')}</TableCell>
+                        <TableCell>{t('core:manage_table_price')}</TableCell>
+                        <TableCell>{t('core:manage_table_interval')}</TableCell>
+                        <TableCell>{t('core:manage_table_effective')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1912,7 +1899,7 @@ export function ManageSubscriptionPage() {
                                   </Typography>
                                   {isCurrent && (
                                     <Chip
-                                      label="Current"
+                                      label={t('core:manage_current')}
                                       size="small"
                                       color="primary"
                                     />

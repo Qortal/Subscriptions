@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useGlobal, usePublish } from 'qapp-core';
 import {
   buildSubscriptionIdentifiers,
@@ -30,10 +31,10 @@ function getGroupId(group: AnyGroup): number | null {
   return null;
 }
 
-function getGroupName(group: AnyGroup): string {
+function getGroupName(group: AnyGroup, unnamedLabel: string): string {
   const name = group?.groupName;
   if (name) return String(name);
-  return 'Unnamed group';
+  return unnamedLabel;
 }
 
 function intervalDaysToBillingInterval(
@@ -50,12 +51,14 @@ export function ManagedSubscriptionCard(props: {
   onManage: (groupId: number) => void;
 }) {
   const { groupInfo, onManage } = props;
+  const { t } = useTranslation(['core']);
   const { auth, identifierOperations } = useGlobal();
   const { fetchPublish } = usePublish(3, 'JSON');
   const [details, setDetails] = useState<SubscriptionFullDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
   console.log('groupInfo', groupInfo);
   const groupId = useMemo(() => getGroupId(groupInfo), [groupInfo]);
+  const unnamedLabel = t('core:managed_unnamed_group');
   const subscriptionId = useMemo(
     () => (groupId !== null ? getSubscriptionIdForGroup(groupId) : null),
     [groupId]
@@ -109,8 +112,8 @@ export function ManagedSubscriptionCard(props: {
     };
   }, [subscriptionId, auth?.name, identifierOperations, fetchPublish]);
 
-  const title = details?.title || getGroupName(groupInfo);
-  const groupName = getGroupName(groupInfo);
+  const title = details?.title || getGroupName(groupInfo, unnamedLabel);
+  const groupName = getGroupName(groupInfo, unnamedLabel);
   const priceQort =
     details && 'amountQort' in details && typeof details.amountQort === 'string'
       ? Number(details.amountQort)
@@ -198,7 +201,7 @@ export function ManagedSubscriptionCard(props: {
               </Typography>
               {(details as any)?.status === 'disabled' && (
                 <Chip
-                  label="Disabled"
+                  label={t('core:managed_card_disabled')}
                   size="small"
                   color="warning"
                   variant="filled"
@@ -210,12 +213,13 @@ export function ManagedSubscriptionCard(props: {
                     <Box>
                       {actions.pendingJoinRequests > 0 && (
                         <div>
-                          {actions.pendingJoinRequests} pending join request
-                          {actions.pendingJoinRequests !== 1 ? 's' : ''}
+                          {actions.pendingJoinRequests === 1
+                            ? t('core:managed_pending_join_requests', { count: actions.pendingJoinRequests })
+                            : t('core:managed_pending_join_requests_plural', { count: actions.pendingJoinRequests })}
                         </div>
                       )}
                       {actions.needsReEncryption && (
-                        <div>Keys need re-encryption</div>
+                        <div>{t('core:managed_keys_reencryption')}</div>
                       )}
                     </Box>
                   }
@@ -231,11 +235,11 @@ export function ManagedSubscriptionCard(props: {
               )}
             </Stack>
             <Typography sx={{ opacity: 0.8 }}>
-              {priceQort} QORT / {billingInterval}
+              {priceQort} QORT / {t(`core:billing_interval_${billingInterval}`, { defaultValue: billingInterval })}
             </Typography>
             {groupName && groupName !== title && (
               <Typography sx={{ opacity: 0.7, fontSize: '0.875rem' }}>
-                Group: {groupName} {groupId !== null && `(ID: ${groupId})`}
+                {t('core:card_group')}: {groupName} {groupId !== null && `(ID: ${groupId})`}
               </Typography>
             )}
           </Box>
@@ -248,7 +252,7 @@ export function ManagedSubscriptionCard(props: {
             useFlexGap
           >
             <Chip
-              label={`${memberCount} subscribers`}
+              label={t('core:managed_subscribers', { count: memberCount })}
               size="small"
               variant="outlined"
             />
@@ -256,14 +260,14 @@ export function ManagedSubscriptionCard(props: {
               <Skeleton variant="rounded" width={90} height={24} />
             ) : (
               <Chip
-                label={`${unpaidCount} unpaid`}
+                label={t('core:managed_unpaid', { count: unpaidCount })}
                 size="small"
                 variant="outlined"
                 color={unpaidCount > 0 ? 'warning' : 'success'}
               />
             )}
             <Chip
-              label={`${revenueQort} QORT/mo est.`}
+              label={t('core:managed_qort_mo_est', { amount: revenueQort })}
               size="small"
               variant="outlined"
             />
@@ -277,9 +281,9 @@ export function ManagedSubscriptionCard(props: {
           disabled={groupId === null}
           color={actions.totalActions > 0 ? 'error' : 'primary'}
         >
-          Manage
+          {t('core:managed_manage')}
           {actions.totalActions > 0 &&
-            ` (${actions.totalActions} action${actions.totalActions !== 1 ? 's' : ''})`}
+            ` (${actions.totalActions === 1 ? t('core:managed_actions', { count: actions.totalActions }) : t('core:managed_actions_plural', { count: actions.totalActions })})`}
         </Button>
       </CardActions>
     </Card>

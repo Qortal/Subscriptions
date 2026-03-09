@@ -15,6 +15,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useGlobal, usePublish } from 'qapp-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { homeTabAtom } from '../state/ui';
@@ -57,6 +58,7 @@ function getOwnerAddress(groupInfo: unknown): string | null {
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation(['core']);
   const { auth, identifierOperations, lists } = useGlobal();
   const { publishMultipleResources } = usePublish();
 
@@ -247,14 +249,14 @@ export function HomePage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={800}>
-            Subscriptions
+            {t('core:home_title')}
           </Typography>
           <Typography variant="body1" sx={{ opacity: 0.85 }}>
-            {auth?.name ? `Welcome, ${auth.name}. ` : null}
-            Manage your subscription.
+            {auth?.name ? t('core:home_welcome_name', { name: auth.name }) : null}
+            {t('core:home_welcome_manage')}
           </Typography>
         </Box>
-        <Tooltip title="Refresh data">
+        <Tooltip title={t('core:home_refresh_data')}>
           <IconButton
             onClick={handleRefresh}
             disabled={subsLoading || managedLoading}
@@ -272,11 +274,11 @@ export function HomePage() {
         sx={{ flexWrap: 'wrap', gap: 1 }}
       >
         <Typography variant="body2" sx={{ opacity: 0.8 }}>
-          Test:
+          {t('core:home_test')}
         </Typography>
         <TextField
           size="small"
-          placeholder="Group ID"
+          placeholder={t('core:home_group_id')}
           type="number"
           value={testGroupId}
           onChange={(e) => setTestGroupId(e.target.value)}
@@ -293,7 +295,7 @@ export function HomePage() {
             Number(testGroupId.trim()) <= 0
           }
         >
-          Open as subscriber
+          {t('core:home_open_as_subscriber')}
         </Button>
       </Stack>
 
@@ -305,21 +307,22 @@ export function HomePage() {
           action={
             tab !== 1 ? (
               <Button color="inherit" size="small" onClick={() => setTab(1)}>
-                View
+                {t('core:home_view')}
               </Button>
             ) : undefined
           }
         >
           <Typography variant="body2" fontWeight={600}>
-            You have {allActions.totalActions} pending action
-            {allActions.totalActions !== 1 ? 's' : ''} on your managed
-            subscriptions
+            {allActions.totalActions === 1
+              ? t('core:home_pending_actions', { count: allActions.totalActions })
+              : t('core:home_pending_actions_plural', { count: allActions.totalActions })}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
             {allActions.totalPendingJoinRequests > 0 && (
               <span>
-                {allActions.totalPendingJoinRequests} join request
-                {allActions.totalPendingJoinRequests !== 1 ? 's' : ''} to review
+                {allActions.totalPendingJoinRequests === 1
+                  ? t('core:home_join_requests_to_review', { count: allActions.totalPendingJoinRequests })
+                  : t('core:home_join_requests_to_review_plural', { count: allActions.totalPendingJoinRequests })}
               </span>
             )}
             {allActions.totalPendingJoinRequests > 0 &&
@@ -327,9 +330,9 @@ export function HomePage() {
               ' • '}
             {allActions.totalNeedingReEncryption > 0 && (
               <span>
-                {allActions.totalNeedingReEncryption} subscription
-                {allActions.totalNeedingReEncryption !== 1 ? 's' : ''} need key
-                re-encryption
+                {allActions.totalNeedingReEncryption === 1
+                  ? t('core:home_need_re_encryption', { count: allActions.totalNeedingReEncryption })
+                  : t('core:home_need_re_encryption_plural', { count: allActions.totalNeedingReEncryption })}
               </span>
             )}
           </Typography>
@@ -344,18 +347,18 @@ export function HomePage() {
           action={
             tab !== 0 ? (
               <Button color="inherit" size="small" onClick={() => setTab(0)}>
-                View
+                {t('core:home_view')}
               </Button>
             ) : undefined
           }
         >
           <Typography variant="body2" fontWeight={600}>
-            {activeNeedingPaymentCount} subscription
-            {activeNeedingPaymentCount !== 1 ? 's' : ''}{' '}
-            {activeNeedingPaymentCount !== 1 ? 'need' : 'needs'} payment
+            {activeNeedingPaymentCount === 1
+              ? t('core:home_subscriptions_need_payment', { count: activeNeedingPaymentCount })
+              : t('core:home_subscriptions_need_payment_plural', { count: activeNeedingPaymentCount })}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-            Your payment is due. Please make a payment to maintain access.
+            {t('core:home_payment_due_message')}
           </Typography>
         </Alert>
       )}
@@ -397,10 +400,10 @@ export function HomePage() {
         <Tabs
           value={tab}
           onChange={(_, next) => setTab(next)}
-          aria-label="home tabs"
+          aria-label={t('core:home_tabs_aria')}
         >
-          <Tab label="Subscriptions I'm in" />
-          <Tab label="Subscriptions I manage" />
+          <Tab label={t('core:home_tab_im_in')} />
+          <Tab label={t('core:home_tab_manage')} />
         </Tabs>
         <Divider sx={{ mt: 1 }} />
       </Box>
@@ -408,7 +411,7 @@ export function HomePage() {
       {tab === 0 ? (
         <Stack spacing={1.5}>
           <Typography variant="h6" fontWeight={700}>
-            Subscriptions I'm in
+            {t('core:home_subscriptions_im_in')}
           </Typography>
 
           {currentSubs.length === 0 ? (
@@ -422,7 +425,7 @@ export function HomePage() {
               <Typography sx={{ opacity: 0.8 }}>
                 {subsError
                   ? subsError
-                  : 'You don’t have any subscriptions yet.'}
+                  : t('core:home_no_subscriptions_yet')}
               </Typography>
             )
           ) : (
@@ -457,11 +460,11 @@ export function HomePage() {
             alignItems={{ xs: 'flex-start', sm: 'center' }}
           >
             <Typography variant="h6" fontWeight={700}>
-              Subscriptions I manage
+              {t('core:home_subscriptions_manage')}
             </Typography>
 
             <Button variant="contained" onClick={() => navigate('/create')}>
-              Create subscription
+              {t('core:home_create_subscription')}
             </Button>
           </Stack>
 
@@ -476,7 +479,7 @@ export function HomePage() {
               <Typography sx={{ opacity: 0.8 }}>
                 {managedError
                   ? managedError
-                  : 'You’re not managing any subscriptions yet.'}
+                  : t('core:home_not_managing_yet')}
               </Typography>
             )
           ) : (

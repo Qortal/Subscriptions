@@ -1,13 +1,16 @@
 import { Box, Button, Card, CardActions, CardContent, Chip, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { MySubscription } from '../types/subscription';
 
 type AnyGroup = Record<string, unknown>;
 
-function formatTimeLeft(expiresAtMs: number): string {
+type TFunc = (key: string, opts?: Record<string, unknown>) => string;
+
+function formatTimeLeft(expiresAtMs: number, t: TFunc): string {
   const now = Date.now();
   const ms = expiresAtMs - now;
-  if (ms <= 0) return 'Due';
+  if (ms <= 0) return t('core:card_due');
   const totalMins = Math.floor(ms / (60 * 1000));
   const totalHours = Math.floor(ms / (60 * 60 * 1000));
   const totalDays = Math.floor(ms / (24 * 60 * 60 * 1000));
@@ -17,29 +20,29 @@ function formatTimeLeft(expiresAtMs: number): string {
   if (years > 0) {
     const remMonths = Math.floor((totalDays - years * 365) / 30);
     return remMonths > 0
-      ? `${years}y ${remMonths}mo left`
-      : `${years} year${years !== 1 ? 's' : ''} left`;
+      ? t('core:card_years_months_left', { years, months: remMonths })
+      : t(years === 1 ? 'core:card_year_left' : 'core:card_years_left', { years });
   }
   if (months > 0) {
     const remDays = totalDays - months * 30;
     return remDays > 0
-      ? `${months}mo ${remDays}d left`
-      : `${months} month${months !== 1 ? 's' : ''} left`;
+      ? t('core:card_months_days_left', { months, days: remDays })
+      : t(months === 1 ? 'core:card_month_left' : 'core:card_months_left', { months });
   }
   if (totalDays > 0) {
     const remHours = totalHours - totalDays * 24;
     return remHours > 0
-      ? `${totalDays}d ${remHours}h left`
-      : `${totalDays} day${totalDays !== 1 ? 's' : ''} left`;
+      ? t('core:card_days_hours_left', { days: totalDays, hours: remHours })
+      : t(totalDays === 1 ? 'core:card_day_left' : 'core:card_days_left', { days: totalDays });
   }
   if (totalHours > 0) {
     const remMins = totalMins - totalHours * 60;
     return remMins > 0
-      ? `${totalHours}h ${remMins}m left`
-      : `${totalHours} hour${totalHours !== 1 ? 's' : ''} left`;
+      ? t('core:card_hours_mins_left', { hours: totalHours, minutes: remMins })
+      : t(totalHours === 1 ? 'core:card_hour_left' : 'core:card_hours_left', { hours: totalHours });
   }
-  if (totalMins > 0) return `${totalMins} min${totalMins !== 1 ? 's' : ''} left`;
-  return 'Due';
+  if (totalMins > 0) return t(totalMins === 1 ? 'core:card_min_left' : 'core:card_mins_left', { minutes: totalMins });
+  return t('core:card_due');
 }
 
 function getGroupName(groupInfo: unknown): string | null {
@@ -87,19 +90,20 @@ export function CurrentSubscriptionCard(props: {
     displayBillingInterval,
     expiresAt,
   } = props;
+  const { t } = useTranslation(['core']);
   const groupName = getGroupName(s.groupInfo);
   const groupId = getGroupId(s.groupInfo);
   const pendingApproval = isPending(s.groupInfo);
 
   const [timeLeft, setTimeLeft] = useState<string>(
-    () => (expiresAt != null ? formatTimeLeft(expiresAt) : '')
+    () => (expiresAt != null ? formatTimeLeft(expiresAt, t) : '')
   );
   useEffect(() => {
     if (expiresAt == null) return;
-    setTimeLeft(formatTimeLeft(expiresAt));
-    const interval = setInterval(() => setTimeLeft(formatTimeLeft(expiresAt)), 60 * 1000);
+    setTimeLeft(formatTimeLeft(expiresAt, t));
+    const interval = setInterval(() => setTimeLeft(formatTimeLeft(expiresAt, t)), 60 * 1000);
     return () => clearInterval(interval);
-  }, [expiresAt]);
+  }, [expiresAt, t]);
 
   return (
     <Card variant="outlined">
@@ -114,16 +118,16 @@ export function CurrentSubscriptionCard(props: {
             <Typography variant="h6" fontWeight={800}>
               {s.title}
             </Typography>
-            <Typography sx={{ opacity: 0.8 }}>Owner: {s.ownerName}</Typography>
+            <Typography sx={{ opacity: 0.8 }}>{t('core:card_owner')}: {s.ownerName}</Typography>
             {groupName && (
               <Typography sx={{ opacity: 0.7, fontSize: '0.875rem' }}>
-                Group: {groupName}
+                {t('core:card_group')}: {groupName}
                 {groupId !== null && ` (ID: ${groupId})`}
               </Typography>
             )}
             {pendingApproval && (
               <Chip
-                label="⏳ Pending Approval"
+                label={t('core:card_pending_approval')}
                 color="warning"
                 size="small"
                 sx={{ mt: 1 }}
@@ -158,10 +162,10 @@ export function CurrentSubscriptionCard(props: {
             <Chip
               label={
                 s.subscriptionDisabled
-                  ? 'Not active'
+                  ? t('core:card_not_active')
                   : needsPayment
-                    ? 'Payment required'
-                    : timeLeft ? `Next due: ${timeLeft}` : `Next due: ${s.nextPaymentDue}`
+                    ? t('core:card_payment_required')
+                    : timeLeft ? `${t('core:card_next_due')}: ${timeLeft}` : `${t('core:card_next_due')}: ${s.nextPaymentDue}`
               }
               size="small"
               variant="outlined"
@@ -184,11 +188,11 @@ export function CurrentSubscriptionCard(props: {
             onClick={() => onPayNow(s.id)}
             disabled={payNowDisabled}
           >
-            Pay now
+            {t('core:card_pay_now')}
           </Button>
         )}
         <Button variant="contained" onClick={() => onView(s.id)}>
-          View subscription
+          {t('core:card_view_subscription')}
         </Button>
       </CardActions>
     </Card>

@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -70,6 +71,7 @@ export function SubscribeModal({
   const [publishFee, setPublishFee] = useState<number | null>(null);
   const [feesLoading, setFeesLoading] = useState(false);
 
+  const { t } = useTranslation(['core']);
   const { value: balance } = useQortBalance();
 
   const totalAmount = +((unitAmount * intervalCount).toFixed(8));
@@ -115,8 +117,8 @@ export function SubscribeModal({
   }, [open, currentStep, isRenewal]);
 
   const steps = isRenewal
-    ? ['Payment', 'Publish Record', 'Complete']
-    : ['Payment', 'Join Group', 'Publish Record', 'Complete'];
+    ? [t('core:modal_payment'), t('core:modal_publish_record'), t('core:modal_complete')]
+    : [t('core:modal_payment'), t('core:modal_join_group'), t('core:modal_publish_record'), t('core:modal_complete')];
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -128,7 +130,7 @@ export function SubscribeModal({
       // Skip join group step if this is a renewal
       setCurrentStep(isRenewal ? 'publish' : 'joinGroup');
     } catch (err: any) {
-      setError(err?.message ?? 'Payment failed');
+      setError(err?.message ?? t('core:modal_payment_failed'));
     } finally {
       setIsProcessing(false);
     }
@@ -142,7 +144,7 @@ export function SubscribeModal({
       await onJoinGroup();
       setCurrentStep('publish');
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to send join group request');
+      setError(err?.message ?? t('core:modal_join_failed'));
     } finally {
       setIsProcessing(false);
     }
@@ -150,7 +152,7 @@ export function SubscribeModal({
 
   const handlePublish = async () => {
     if (!paymentSignature) {
-      setError('No payment signature found');
+      setError(t('core:modal_no_signature'));
       return;
     }
 
@@ -161,7 +163,7 @@ export function SubscribeModal({
       await onPublish(paymentSignature);
       setCurrentStep('complete');
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to publish subscription record');
+      setError(err?.message ?? t('core:modal_publish_failed'));
     } finally {
       setIsProcessing(false);
     }
@@ -232,7 +234,7 @@ export function SubscribeModal({
     >
       <DialogTitle>
         <Typography variant="h6" fontWeight={800}>
-          {isRenewal ? 'Renew' : 'Subscribe to'} {subscriptionTitle}
+          {t('core:modal_renew_subscribe', { action: isRenewal ? t('core:modal_renew') : t('core:modal_subscribe_to'), title: subscriptionTitle })}
         </Typography>
         {currentStep === 'payment' && (
           <Typography variant="body2" sx={{ opacity: 0.6, mt: 0.25, fontWeight: 400 }}>
@@ -261,7 +263,7 @@ export function SubscribeModal({
             <Box>
               {/* Duration picker */}
               <Typography variant="body2" sx={{ opacity: 0.75, mb: 1.5 }}>
-                {isRenewal ? 'How long would you like to renew for?' : 'Choose how long to subscribe for:'}
+                {isRenewal ? t('core:modal_renew_duration') : t('core:modal_choose_duration')}
               </Typography>
 
               <Stack
@@ -320,7 +322,7 @@ export function SubscribeModal({
                   <Stack direction="row" alignItems="center" spacing={1} mt={1}>
                     <CircularProgress size={12} />
                     <Typography variant="caption" sx={{ opacity: 0.55 }}>
-                      Loading fees...
+                      {t('core:modal_loading_fees')}
                     </Typography>
                   </Stack>
                 )}
@@ -329,7 +331,7 @@ export function SubscribeModal({
                   <>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" mt={1}>
                       <Typography variant="caption" sx={{ opacity: 0.6 }}>
-                        + TX fee (payment)
+                        {t('core:modal_tx_fee_payment')}
                       </Typography>
                       <Typography variant="caption" sx={{ opacity: 0.6 }}>
                         {paymentFee} QORT
@@ -338,7 +340,7 @@ export function SubscribeModal({
                     {!isRenewal && joinGroupFee !== null && (
                       <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
                         <Typography variant="caption" sx={{ opacity: 0.6 }}>
-                          + TX fee (join group)
+                          {t('core:modal_tx_fee_join')}
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.6 }}>
                           {joinGroupFee} QORT
@@ -347,7 +349,7 @@ export function SubscribeModal({
                     )}
                     <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
                       <Typography variant="caption" sx={{ opacity: 0.6 }}>
-                        + TX fee (publish)
+                        {t('core:modal_tx_fee_publish')}
                       </Typography>
                       <Typography variant="caption" sx={{ opacity: 0.6 }}>
                         {publishFee} QORT
@@ -356,7 +358,7 @@ export function SubscribeModal({
                     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1, pt: 1 }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="body2" fontWeight={600}>
-                          Total required
+                          {t('core:modal_total_required')}
                         </Typography>
                         <Typography variant="body2" fontWeight={700}>
                           {totalRequired} QORT
@@ -369,14 +371,14 @@ export function SubscribeModal({
 
               {hasInsufficientBalance && (
                 <Alert severity="warning" sx={{ mt: 1.5 }}>
-                  Insufficient balance. You have <strong>{balance?.toFixed(8)} QORT</strong> but need at least <strong>{totalRequired} QORT</strong> (including fees).
+                  {t('core:modal_insufficient_balance', { balance: balance?.toFixed(8) ?? '0', required: String(totalRequired ?? 0) })}
                 </Alert>
               )}
 
               <Typography variant="caption" sx={{ display: 'block', opacity: 0.55, mt: 1.5 }}>
                 {!isRenewal
-                  ? 'After payment you\'ll need to join the group and publish your subscription record on-chain.'
-                  : 'After payment you\'ll need to publish your updated subscription record on-chain.'}
+                  ? t('core:modal_after_payment_join')
+                  : t('core:modal_after_payment_renew')}
               </Typography>
             </Box>
           )}
@@ -386,20 +388,18 @@ export function SubscribeModal({
               <Stack direction="row" spacing={1} alignItems="center" mb={2}>
                 <CheckCircleIcon color="success" />
                 <Typography variant="body2" color="success.main">
-                  Payment sent successfully!
+                  {t('core:modal_payment_sent')}
                 </Typography>
               </Stack>
 
               <Typography variant="body1" gutterBottom>
-                <strong>Step 2:</strong> Request to join the group
+                {t('core:modal_step_2_join')}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.85, mt: 1 }}>
-                Now you need to send a join request to become a member of the
-                subscription group (Group ID: {groupId}).
+                {t('core:modal_join_request_body', { groupId })}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.7, mt: 1 }}>
-                The group owner will need to approve your request before you can
-                access group content.
+                {t('core:modal_owner_approve')}
               </Typography>
             </Box>
           )}
@@ -409,29 +409,26 @@ export function SubscribeModal({
               <Stack direction="row" spacing={1} alignItems="center" mb={1}>
                 <CheckCircleIcon color="success" />
                 <Typography variant="body2" color="success.main">
-                  Payment sent successfully!
+                  {t('core:modal_payment_sent')}
                 </Typography>
               </Stack>
               {!isRenewal && (
                 <Stack direction="row" spacing={1} alignItems="center" mb={2}>
                   <CheckCircleIcon color="success" />
                   <Typography variant="body2" color="success.main">
-                    Join request sent successfully!
+                    {t('core:modal_join_sent')}
                   </Typography>
                 </Stack>
               )}
 
               <Typography variant="body1" gutterBottom>
-                <strong>Step {isRenewal ? '2' : '3'}:</strong> Publish your
-                subscription record
+                {t('core:modal_step_3_publish', { step: isRenewal ? 2 : 3 })}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.85, mt: 1 }}>
-                Now you need to publish your subscription record on-chain to
-                complete the process. This links your payment to the
-                subscription.
+                {t('core:modal_publish_explain')}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.7, mt: 1 }}>
-                You can close this modal and complete this step later if needed.
+                {t('core:modal_complete_later')}
               </Typography>
               {paymentSignature && (
                 <Typography
@@ -443,7 +440,7 @@ export function SubscribeModal({
                     opacity: 0.6,
                   }}
                 >
-                  Payment TX: {paymentSignature.slice(0, 20)}...
+                  {t('core:modal_payment_tx', { signature: paymentSignature.slice(0, 20) })}
                 </Typography>
               )}
             </Box>
@@ -456,22 +453,19 @@ export function SubscribeModal({
               />
               <Typography variant="h6" gutterBottom fontWeight={700}>
                 {isRenewal
-                  ? 'Successfully Renewed!'
-                  : 'Subscription Request Submitted!'}
+                  ? t('core:modal_success_renewed')
+                  : t('core:modal_success_submitted')}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.85 }}>
                 {isRenewal
-                  ? `Your subscription to ${subscriptionTitle} has been renewed and is now active.`
-                  : `Your payment and subscription record have been published successfully.`}
+                  ? t('core:modal_renewed_active', { title: subscriptionTitle })
+                  : t('core:modal_published_success')}
               </Typography>
               {!isRenewal && (
                 <Typography variant="body2" sx={{ opacity: 0.85, mt: 2 }}>
-                  <strong>Next Steps:</strong>
+                  <strong>{t('core:modal_next_steps')}</strong>
                   <br />
-                  The subscription manager needs to approve your join request to
-                  grant you access to the group. Once approved, they will also
-                  need to re-encrypt the group keys to give you access to
-                  encrypted content.
+                  {t('core:modal_next_steps_body')}
                 </Typography>
               )}
             </Box>
@@ -483,7 +477,7 @@ export function SubscribeModal({
         {currentStep === 'payment' && (
           <>
             <Button onClick={handleClose} disabled={isProcessing}>
-              Cancel
+              {t('core:modal_cancel')}
             </Button>
             <Button
               variant="contained"
@@ -491,7 +485,7 @@ export function SubscribeModal({
               disabled={isProcessing || feesLoading || hasInsufficientBalance}
               startIcon={isProcessing ? <CircularProgress size={16} /> : null}
             >
-              {isProcessing ? 'Processing...' : 'Make Payment'}
+              {isProcessing ? t('core:modal_processing') : t('core:modal_make_payment')}
             </Button>
           </>
         )}
@@ -504,7 +498,7 @@ export function SubscribeModal({
               disabled={isProcessing}
               startIcon={isProcessing ? <CircularProgress size={16} /> : null}
             >
-              {isProcessing ? 'Sending Request...' : 'Join Group'}
+              {isProcessing ? t('core:modal_sending_request') : t('core:modal_join_group_btn')}
             </Button>
           </>
         )}
@@ -517,14 +511,14 @@ export function SubscribeModal({
               disabled={isProcessing}
               startIcon={isProcessing ? <CircularProgress size={16} /> : null}
             >
-              {isProcessing ? 'Publishing...' : 'Publish Record'}
+              {isProcessing ? t('core:modal_publishing') : t('core:modal_publish_btn')}
             </Button>
           </>
         )}
 
         {currentStep === 'complete' && (
           <Button variant="contained" onClick={handleClose}>
-            Done
+            {t('core:modal_done')}
           </Button>
         )}
       </DialogActions>

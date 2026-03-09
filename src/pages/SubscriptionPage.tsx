@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalog } from '../hooks/useCatalog';
 import { useGlobal, usePublish } from 'qapp-core';
+import { useTranslation } from 'react-i18next';
 import {
   sendSubscriptionPayment,
   publishSubscriptionRecord,
@@ -50,33 +51,50 @@ import {
 import { getSubscriptionIdForGroup } from '../lib/subscriptionPublishing';
 import { resolvePaymentIndexIdentifierForPublish } from '../lib/resolvePaymentIndexIdentifier';
 
-function formatExpiry(expiresAt: number): {
+function formatExpiry(
+  expiresAt: number,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): {
   dateText: string;
   timeLeft: string;
+  isExpired: boolean;
 } {
   const d = new Date(expiresAt);
   const dateText = d.toLocaleDateString(undefined, { dateStyle: 'medium' });
   const now = Date.now();
-  if (expiresAt <= now) return { dateText, timeLeft: 'Expired' };
+  if (expiresAt <= now)
+    return { dateText, timeLeft: t('core:sub_expired'), isExpired: true };
   const ms = expiresAt - now;
   const days = Math.floor(ms / (24 * 60 * 60 * 1000));
   const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
   const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-  const timeLeft =
-    days > 0
-      ? `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''} left`
-      : hours >= 1
-        ? minutes > 0
-          ? `${hours}h ${minutes}m left`
-          : `${hours} hour${hours !== 1 ? 's' : ''} left`
-        : `${minutes} min${minutes !== 1 ? 's' : ''} left`;
-  return { dateText, timeLeft };
+  let timeLeft: string;
+  if (days > 0) {
+    timeLeft =
+      days === 1 && hours === 1
+        ? t('core:sub_time_left_days_hours', { days, hours })
+        : t('core:sub_time_left_days_hours_plural', { days, hours });
+  } else if (hours >= 1) {
+    timeLeft =
+      minutes > 0
+        ? t('core:sub_time_left_hours', { hours, minutes })
+        : hours === 1
+          ? t('core:sub_time_left_hour', { hours })
+          : t('core:sub_time_left_hours_plural', { hours });
+  } else {
+    timeLeft =
+      minutes === 1
+        ? t('core:sub_time_left_mins', { minutes })
+        : t('core:sub_time_left_mins_plural', { minutes });
+  }
+  return { dateText, timeLeft, isExpired: false };
 }
 
 const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
 export function SubscriptionPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation(['core']);
   const { subscriptionId } = useParams();
   const { catalog } = useCatalog();
   const { auth, identifierOperations, lists } = useGlobal();
@@ -127,6 +145,7 @@ export function SubscriptionPage() {
   console.log('item', item);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
   const [justSubscribed, setJustSubscribed] = useState(false);
   const [leaveGroupDialogOpen, setLeaveGroupDialogOpen] = useState(false);
@@ -216,10 +235,10 @@ export function SubscriptionPage() {
     : undefined;
   const currentUserExpiresAt = currentUserInfo?.expiresAt;
   const expiryDisplay =
-    currentUserExpiresAt != null ? formatExpiry(currentUserExpiresAt) : null;
+    currentUserExpiresAt != null ? formatExpiry(currentUserExpiresAt, t) : null;
 
   // Expired = paid period has ended (excludes grace). Show renew CTA when the expiry date has passed.
-  const isExpired = expiryDisplay?.timeLeft === 'Expired';
+  const isExpired = expiryDisplay?.isExpired ?? false;
   const showRenewCta = userNeedsPayment || (userIsSubscribed && isExpired);
 
   // Calculate the locked renewal price:
@@ -267,34 +286,36 @@ export function SubscriptionPage() {
 
   const handleOpenSubscribeModal = () => {
     if (!auth?.name || !auth?.address) {
-      setSnackbarMsg('You must be logged in to subscribe');
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_must_login'));
       setSnackbarOpen(true);
       return;
     }
     // Check if subscription is disabled
     if (isDisabled) {
-      setSnackbarMsg(
-        'This subscription is currently not accepting new subscribers nor payments.'
-      );
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_not_accepting'));
       setSnackbarOpen(true);
       return;
     }
     // Prevent owner from subscribing to their own group
     if (isOwner) {
-      setSnackbarMsg('You are the owner of this subscription group');
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_you_owner'));
       setSnackbarOpen(true);
       return;
     }
     // Prevent opening if user has pending join request
     if (hasPendingJoinRequest) {
-      setSnackbarMsg('Your subscription request is pending approval');
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_pending_approval'));
       setSnackbarOpen(true);
       return;
     }
     // Allow opening modal if not subscribed, or needs payment, or expired (renewal)
-    const isExpiredForModal = expiryDisplay?.timeLeft === 'Expired';
-    if (userIsSubscribed && !userNeedsPayment && !isExpiredForModal) {
-      setSnackbarMsg('You are already subscribed!');
+    if (userIsSubscribed && !userNeedsPayment && !isExpired) {
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_already_subscribed'));
       setSnackbarOpen(true);
       return;
     }
@@ -389,11 +410,13 @@ export function SubscriptionPage() {
       });
       setLeaveGroupDialogOpen(false);
       setJustSubscribed(false);
-      setSnackbarMsg('You have left the group.');
+      setSnackbarSeverity('success');
+      setSnackbarMsg(t('core:sub_snackbar_left_group'));
       setSnackbarOpen(true);
       setRefreshTrigger((prev) => prev + 1);
     } catch (e: any) {
-      setSnackbarMsg(e?.message ?? 'Failed to leave group');
+      setSnackbarSeverity('error');
+      setSnackbarMsg(e?.message ?? t('core:sub_snackbar_failed_leave'));
       setSnackbarOpen(true);
     } finally {
       setLeavingGroup(false);
@@ -401,7 +424,8 @@ export function SubscriptionPage() {
   };
 
   const handleSubscribeComplete = () => {
-    setSnackbarMsg('Successfully subscribed!');
+    setSnackbarSeverity('success');
+    setSnackbarMsg(t('core:sub_snackbar_success_subscribed'));
     setSnackbarOpen(true);
     setJustSubscribed(true);
   };
@@ -423,7 +447,7 @@ export function SubscriptionPage() {
     return (
       <Stack spacing={2} alignItems="center" py={4}>
         <Typography variant="h5" fontWeight={800}>
-          Loading subscription...
+          {t('core:sub_loading')}
         </Typography>
       </Stack>
     );
@@ -434,12 +458,12 @@ export function SubscriptionPage() {
     return (
       <Stack spacing={2}>
         <Typography variant="h5" fontWeight={800} color="error">
-          Failed to load subscription
+          {t('core:sub_failed_load')}
         </Typography>
         <Typography sx={{ opacity: 0.85 }}>{fetchError}</Typography>
         <Box>
           <Button variant="contained" onClick={() => navigate('/')}>
-            Back to home
+            {t('core:sub_back_home')}
           </Button>
         </Box>
       </Stack>
@@ -451,14 +475,14 @@ export function SubscriptionPage() {
     return (
       <Stack spacing={2}>
         <Typography variant="h5" fontWeight={800}>
-          Subscription not found
+          {t('core:sub_not_found')}
         </Typography>
         <Typography sx={{ opacity: 0.85 }}>
-          This subscription hasn't been published yet or doesn't exist.
+          {t('core:sub_not_published')}
         </Typography>
         <Box>
           <Button variant="contained" onClick={() => navigate('/')}>
-            Back to home
+            {t('core:sub_back_home')}
           </Button>
         </Box>
       </Stack>
@@ -469,9 +493,9 @@ export function SubscriptionPage() {
     <Stack spacing={2.5}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Button size="small" onClick={() => navigate('/')}>
-          ← Home
+          {t('core:sub_home_btn')}
         </Button>
-        <Tooltip title="Refresh subscription data">
+        <Tooltip title={t('core:sub_refresh_tooltip')}>
           <IconButton
             onClick={handleRefresh}
             disabled={
@@ -489,17 +513,17 @@ export function SubscriptionPage() {
           {item.title}
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip label={`Owner: ${item.ownerName}`} variant="outlined" />
+          <Chip label={`${t('core:sub_owner')}: ${item.ownerName}`} variant="outlined" />
           <Chip label={item.ownerAddress} variant="outlined" />
           {groupName && (
             <Chip
-              label={`Group: ${groupName}`}
+              label={`${t('core:sub_group')}: ${groupName}`}
               variant="outlined"
               color="primary"
             />
           )}
-          <Chip label={`Group ID: ${item.groupId}`} variant="outlined" />
-          {groupLoading && <Chip label="Loading group..." variant="outlined" />}
+          <Chip label={`${t('core:sub_group_id')}: ${item.groupId}`} variant="outlined" />
+          {groupLoading && <Chip label={t('core:sub_loading_group')} variant="outlined" />}
         </Stack>
       </Stack>
 
@@ -508,7 +532,7 @@ export function SubscriptionPage() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" fontWeight={800}>
-                About
+                {t('core:sub_about')}
               </Typography>
               <Typography sx={{ opacity: 0.85, mt: 0.5 }}>
                 {item.description}
@@ -517,7 +541,7 @@ export function SubscriptionPage() {
               <Divider sx={{ my: 2 }} />
 
               <Typography variant="h6" fontWeight={800}>
-                What you get
+                {t('core:sub_what_you_get')}
               </Typography>
               <List dense>
                 {item.perks.map((perk) => (
@@ -534,7 +558,7 @@ export function SubscriptionPage() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" fontWeight={800}>
-                Subscribe
+                {t('core:sub_subscribe')}
               </Typography>
 
               <Stack spacing={1} sx={{ mt: 1.5 }}>
@@ -556,16 +580,14 @@ export function SubscriptionPage() {
                       variant="caption"
                       sx={{ opacity: 0.6, fontStyle: 'italic' }}
                     >
-                      Your rate is locked at {displayPrice} QORT. The current
-                      price for new subscribers is {item.priceQort} QORT.
+                      {t('core:sub_rate_locked', { locked: displayPrice, current: item.priceQort })}
                     </Typography>
                   )}
 
                 {isDisabled ? (
                   <Alert severity="info">
                     <Typography variant="body2" fontWeight={600}>
-                      This subscription is currently not accepting new
-                      subscribers nor payments.
+                      {t('core:sub_not_accepting')}
                     </Typography>
                   </Alert>
                 ) : hasPendingJoinRequest ? (
@@ -575,7 +597,7 @@ export function SubscriptionPage() {
                     disabled
                     sx={{ color: 'warning.main', borderColor: 'warning.main' }}
                   >
-                    ⏳ Pending Approval
+                    {t('core:sub_pending_approval_btn')}
                   </Button>
                 ) : isOwner ? (
                   <Button
@@ -584,7 +606,7 @@ export function SubscriptionPage() {
                     disabled
                     sx={{ color: 'info.main', borderColor: 'info.main' }}
                   >
-                    👤 You Own This Group
+                    {t('core:sub_you_own_group')}
                   </Button>
                 ) : userIsSubscribed && !userNeedsPayment && !isExpired ? (
                   <Stack spacing={1}>
@@ -597,12 +619,12 @@ export function SubscriptionPage() {
                         borderColor: 'success.main',
                       }}
                     >
-                      ✓ Already Subscribed
+                      {t('core:sub_already_subscribed')}
                     </Button>
                     {expiryDisplay && (
                       <Box sx={{ pt: 0.5 }}>
                         <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Expires: {expiryDisplay.dateText}
+                          {t('core:sub_expires')}: {expiryDisplay.dateText}
                         </Typography>
                         <Typography
                           variant="body2"
@@ -610,7 +632,7 @@ export function SubscriptionPage() {
                             opacity: 0.85,
                             fontWeight: 600,
                             color:
-                              expiryDisplay.timeLeft === 'Expired'
+                              expiryDisplay.isExpired
                                 ? 'error.main'
                                 : 'text.secondary',
                           }}
@@ -626,7 +648,7 @@ export function SubscriptionPage() {
                       onClick={() => setLeaveGroupDialogOpen(true)}
                       sx={{ mt: 0.5 }}
                     >
-                      Leave Group
+                      {t('core:sub_leave_group')}
                     </Button>
                   </Stack>
                 ) : showRenewCta ? (
@@ -639,10 +661,10 @@ export function SubscriptionPage() {
                       disabled={checkingSubscription}
                     >
                       {checkingSubscription
-                        ? 'Checking...'
+                        ? t('core:sub_checking')
                         : isExpired
-                          ? 'Pay subscription'
-                          : '⚠ Payment Required'}
+                          ? t('core:sub_pay_subscription')
+                          : t('core:sub_payment_required')}
                     </Button>
                     <Button
                       size="small"
@@ -650,7 +672,7 @@ export function SubscriptionPage() {
                       color="error"
                       onClick={() => setLeaveGroupDialogOpen(true)}
                     >
-                      Leave Group
+                      {t('core:sub_leave_group')}
                     </Button>
                   </Stack>
                 ) : (
@@ -661,8 +683,8 @@ export function SubscriptionPage() {
                     disabled={checkingSubscription || checkingJoinRequests}
                   >
                     {checkingSubscription || checkingJoinRequests
-                      ? 'Checking...'
-                      : 'Subscribe'}
+                      ? t('core:sub_checking')
+                      : t('core:sub_subscribe_btn')}
                   </Button>
                 )}
               </Stack>
@@ -675,12 +697,10 @@ export function SubscriptionPage() {
       {hasPendingJoinRequest && (
         <Alert severity="info">
           <Typography variant="body2" fontWeight={600} gutterBottom>
-            Subscription Request Pending
+            {t('core:sub_request_pending_title')}
           </Typography>
           <Typography variant="body2">
-            Your payment and subscription record have been published
-            successfully. The subscription manager needs to approve your join
-            request to grant you access to the group.
+            {t('core:sub_request_pending_body')}
           </Typography>
         </Alert>
       )}
@@ -689,28 +709,26 @@ export function SubscriptionPage() {
       {shouldCheckGroupKeys && (
         <Box>
           {checkingGroupKeys ? (
-            <Alert severity="info">Checking group encryption access...</Alert>
+            <Alert severity="info">{t('core:sub_checking_encryption')}</Alert>
           ) : isInGroupKeys ? (
             <Alert severity="success">
-              ✓ You have access to the group's encrypted content.
+              {t('core:sub_have_access')}
             </Alert>
           ) : (
             <Alert severity="warning">
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                Waiting for Access
+                {t('core:sub_waiting_access_title')}
               </Typography>
               <Typography variant="body2">
-                You have subscribed and paid, but you don't yet have access to
-                encrypted group content. The subscription manager needs to:
+                {t('core:sub_waiting_access_body')}
               </Typography>
               <Typography variant="body2" component="div" sx={{ mt: 1 }}>
-                1. Approve your join request (if not yet approved)
+                {t('core:sub_waiting_access_step1')}
                 <br />
-                2. Re-encrypt the group keys to include you
+                {t('core:sub_waiting_access_step2')}
               </Typography>
               <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
-                This is typically done when the manager reviews new subscribers.
-                You'll automatically gain access once completed.
+                {t('core:sub_waiting_access_note')}
               </Typography>
             </Alert>
           )}
@@ -740,17 +758,15 @@ export function SubscriptionPage() {
       >
         <DialogTitle>
           <Typography variant="h6" fontWeight={800}>
-            Leave Group
+            {t('core:sub_leave_dialog_title')}
           </Typography>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body1" gutterBottom>
-            Are you sure you want to leave this group?
+            {t('core:sub_leave_confirm')}
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.8, mt: 1 }}>
-            Leaving the group means leaving the subscription. You will lose
-            access to all group content and benefits. This action cannot be
-            undone — you would need to re-subscribe to regain access.
+            {t('core:sub_leave_warning')}
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -758,7 +774,7 @@ export function SubscriptionPage() {
             onClick={() => setLeaveGroupDialogOpen(false)}
             disabled={leavingGroup}
           >
-            Cancel
+            {t('core:sub_cancel')}
           </Button>
           <Button
             variant="contained"
@@ -766,7 +782,7 @@ export function SubscriptionPage() {
             onClick={handleLeaveGroup}
             disabled={leavingGroup}
           >
-            {leavingGroup ? 'Leaving...' : 'Confirm Leave'}
+            {leavingGroup ? t('core:sub_leaving') : t('core:sub_confirm_leave')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -779,11 +795,7 @@ export function SubscriptionPage() {
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
-          severity={
-            snackbarMsg.includes('Failed') || snackbarMsg.includes('must')
-              ? 'error'
-              : 'success'
-          }
+          severity={snackbarSeverity}
           variant="filled"
           sx={{ width: '100%' }}
         >

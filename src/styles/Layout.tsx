@@ -1,5 +1,6 @@
 import { AppBar, Box, Button, Container, Toolbar, Typography } from '@mui/material';
 import { useGlobal } from 'qapp-core';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useIframe } from '../hooks/useIframeListener';
 import { useCacheCleanup } from '../hooks/useCacheCleanup';
@@ -9,6 +10,7 @@ const Layout = () => {
   useCacheCleanup(); // Automatically clean up confirmed transactions from cache
   const navigate = useNavigate();
   const { auth } = useGlobal();
+  const { t } = useTranslation(['core']);
 
   return (
     <>
@@ -25,17 +27,17 @@ const Layout = () => {
             sx={{ cursor: 'pointer' }}
             onClick={() => navigate('/')}
           >
-            Subscriptions
+            {t('core:app_subscriptions')}
           </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
 
           <Button color="inherit" onClick={() => navigate('/')}>
-            Home
+            {t('core:app_home')}
           </Button>
 
           <Typography variant="body2" sx={{ ml: 2, opacity: 0.8 }}>
-            {auth?.name ?? 'Guest'}
+            {auth?.name ?? t('core:app_guest')}
           </Typography>
         </Toolbar>
       </AppBar>
