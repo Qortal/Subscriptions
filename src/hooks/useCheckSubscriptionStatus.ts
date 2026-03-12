@@ -38,6 +38,8 @@ export function useCheckSubscriptionStatus(
   const [status, setStatus] = useState<SubscriptionStatus>('not-subscribed');
   const [loading, setLoading] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  /** True when the user is in the group (member); false when not or unknown. Used to decide e.g. kick-info fetch. */
+  const [isMember, setIsMember] = useState(false);
   /** When user has a payment record, their locked-in subscription index (si from PRODUCT) for renewals */
   const [
     existingSubscriptionIndexIdentifier,
@@ -48,6 +50,7 @@ export function useCheckSubscriptionStatus(
     if (!enabled || groupId === null || !auth?.address) {
       setStatus('not-subscribed');
       setLoading(false);
+      setIsMember(false);
       return;
     }
 
@@ -72,6 +75,7 @@ export function useCheckSubscriptionStatus(
         if (pendingLeave) {
           if (!cancelled) {
             setIsOwner(false);
+            setIsMember(false);
             setStatus('not-subscribed');
             setLoading(false);
           }
@@ -86,6 +90,7 @@ export function useCheckSubscriptionStatus(
         ) {
           if (!cancelled) {
             setIsOwner(false);
+            setIsMember(true);
             setStatus('subscribed-paid');
             setLoading(false);
           }
@@ -108,6 +113,7 @@ export function useCheckSubscriptionStatus(
           if (groupOwner === auth.address) {
             if (!cancelled) {
               setIsOwner(true);
+              setIsMember(false);
               setStatus('not-subscribed');
               setLoading(false);
             }
@@ -122,6 +128,7 @@ export function useCheckSubscriptionStatus(
 
         if (!response.ok) {
           if (!cancelled) {
+            setIsMember(false);
             setStatus('not-subscribed');
             setLoading(false);
           }
@@ -132,17 +139,20 @@ export function useCheckSubscriptionStatus(
 
         // Check if the target groupId is in the user's groups
         // If user sent a join request but it hasn't been approved yet, they won't be a member
-        const isMember =
+        const inGroup =
           Array.isArray(groups) &&
           groups.some((group: any) => group.groupId === groupId);
 
-        if (!isMember) {
+        if (!inGroup) {
           if (!cancelled) {
+            setIsMember(false);
             setStatus('not-subscribed');
             setLoading(false);
           }
           return;
         }
+
+        if (!cancelled) setIsMember(true);
 
         // User is a member (join request was approved), now check if they have a payment record
         if (
@@ -284,6 +294,7 @@ export function useCheckSubscriptionStatus(
       } catch (error) {
         console.error('Failed to check subscription status:', error);
         if (!cancelled) {
+          setIsMember(false);
           setStatus('not-subscribed');
           setLoading(false);
         }
@@ -312,6 +323,8 @@ export function useCheckSubscriptionStatus(
     isSubscribed: status !== 'not-subscribed',
     needsPayment: status === 'subscribed-unpaid',
     isOwner, // Expose whether the current user is the group owner
+    /** True when the user is in the group (member). Use this, not isSubscribed, to decide e.g. whether to fetch kick info. */
+    isMember,
     /** When set, use this for publish (renewal); otherwise use latest index (new subscriber) */
     existingSubscriptionIndexIdentifier,
   };

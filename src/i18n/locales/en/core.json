@@ -90,6 +90,12 @@
   "sub_snackbar_left_group": "You have left the group.",
   "sub_snackbar_failed_leave": "Failed to leave group",
   "sub_snackbar_success_subscribed": "Successfully subscribed!",
+  "sub_snackbar_banned": "You are banned from this subscription.",
+  "sub_kicked_message_intro": "You were once part of the subscription but have been kicked out for the following reason:",
+  "sub_kicked_no_reason": "no reason provided",
+  "sub_banned_message_intro": "You have been banned from this subscription for the following reason:",
+  "sub_banned_no_reason": "no reason provided",
+  "sub_reason_payment_overdue": "Payment overdue",
 
   "create_home_btn": "← Home",
   "create_title": "Create subscription",

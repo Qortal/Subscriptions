@@ -39,6 +39,8 @@ import { useValidateUserInGroupKeys } from '../hooks/useValidateUserInGroupKeys'
 import { useJoinRequestGroups } from '../hooks/useJoinRequestGroups';
 import { useSubscriptionBillingDetails } from '../hooks/useSubscriptionBillingDetails';
 import { useSubscriptionIndexPrice } from '../hooks/useSubscriptionIndexPrice';
+import { useKickedFromSubscription } from '../hooks/useKickedFromSubscription';
+import { useBannedFromGroup } from '../hooks/useBannedFromGroup';
 import {
   useSubscriberPaymentStatus,
   getPriceAtTime,
@@ -162,6 +164,7 @@ export function SubscriptionPage() {
     isSubscribed,
     needsPayment,
     isOwner,
+    isMember,
     existingSubscriptionIndexIdentifier,
   } = useCheckSubscriptionStatus(
     item?.groupId ?? null,
@@ -203,6 +206,29 @@ export function SubscriptionPage() {
 
   // Check if subscription is disabled (from fetched details; item from catalog/fetch doesn't include status)
   const isDisabled = item && billingDetails?.status === 'disabled';
+
+  const kickBanEnabled =
+    !!item &&
+    !isOwner &&
+    !isMember &&
+    !!auth?.address &&
+    !checkingSubscription;
+
+  // When not in group, check if user is banned (takes precedence over kick)
+  const { isBanned, banInfo } = useBannedFromGroup(
+    item?.groupId ?? null,
+    auth?.address ?? null,
+    kickBanEnabled
+  );
+
+  // When not in group and not banned, check if user was once a member and was kicked
+  const { kickInfo } = useKickedFromSubscription(
+    item?.groupId ?? null,
+    item?.detailsIdentifier ?? null,
+    auth?.address ?? null,
+    auth?.name ?? null,
+    kickBanEnabled && !isBanned
+  );
 
   // Check if user is in group encryption keys (only if subscribed and paid)
   const shouldCheckGroupKeys = userIsSubscribed && !userNeedsPayment;
@@ -302,6 +328,13 @@ export function SubscriptionPage() {
     if (isOwner) {
       setSnackbarSeverity('error');
       setSnackbarMsg(t('core:sub_snackbar_you_owner'));
+      setSnackbarOpen(true);
+      return;
+    }
+    // Prevent opening if user is banned
+    if (isBanned) {
+      setSnackbarSeverity('error');
+      setSnackbarMsg(t('core:sub_snackbar_banned'));
       setSnackbarOpen(true);
       return;
     }
@@ -562,6 +595,40 @@ export function SubscriptionPage() {
               </Typography>
 
               <Stack spacing={1} sx={{ mt: 1.5 }}>
+                {isBanned && banInfo && (
+                  <Alert severity="error">
+                    <Typography variant="body2" fontWeight={600}>
+                      {t('core:sub_banned_message_intro')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      sx={{ mt: 1 }}
+                      component="div"
+                    >
+                      {banInfo.reason === 'subscriptions:payment-overdue'
+                        ? t('core:sub_reason_payment_overdue')
+                        : (banInfo.reason ?? t('core:sub_banned_no_reason'))}
+                    </Typography>
+                  </Alert>
+                )}
+                {!isBanned && kickInfo.kicked && (
+                  <Alert severity="warning">
+                    <Typography variant="body2" fontWeight={600}>
+                      {t('core:sub_kicked_message_intro')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      sx={{ mt: 1 }}
+                      component="div"
+                    >
+                      {kickInfo.reason === 'subscriptions:payment-overdue'
+                        ? t('core:sub_reason_payment_overdue')
+                        : (kickInfo.reason ?? t('core:sub_kicked_no_reason'))}
+                    </Typography>
+                  </Alert>
+                )}
                 <Divider />
 
                 <Typography variant="h5" fontWeight={900}>
@@ -658,7 +725,7 @@ export function SubscriptionPage() {
                       variant="contained"
                       color="error"
                       onClick={handleOpenSubscribeModal}
-                      disabled={checkingSubscription}
+                      disabled={checkingSubscription || isBanned}
                     >
                       {checkingSubscription
                         ? t('core:sub_checking')
@@ -680,7 +747,11 @@ export function SubscriptionPage() {
                     size="large"
                     variant="contained"
                     onClick={handleOpenSubscribeModal}
-                    disabled={checkingSubscription || checkingJoinRequests}
+                    disabled={
+                      checkingSubscription ||
+                      checkingJoinRequests ||
+                      isBanned
+                    }
                   >
                     {checkingSubscription || checkingJoinRequests
                       ? t('core:sub_checking')
