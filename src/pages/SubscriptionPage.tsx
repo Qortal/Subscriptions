@@ -26,6 +26,7 @@ import { useCatalog } from '../hooks/useCatalog';
 import { useGlobal, usePublish } from 'qapp-core';
 import { useTranslation } from 'react-i18next';
 import {
+  notifySubscriptionsUpdate,
   sendSubscriptionPayment,
   publishSubscriptionRecord,
   sendJoinGroupRequest,
@@ -398,6 +399,7 @@ export function SubscriptionPage() {
     updatePendingSubscribeAction(auth.address, subscriptionId, {
       joinRequestSent: true,
     });
+    notifySubscriptionsUpdate();
   };
 
   const handlePublish = async (paymentSignature: string): Promise<void> => {
@@ -430,6 +432,7 @@ export function SubscriptionPage() {
     updatePendingSubscribeAction(auth.address, subscriptionId, {
       recordPublished: true,
     });
+    notifySubscriptionsUpdate();
   };
 
   const handleLeaveGroup = async () => {

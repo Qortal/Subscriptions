@@ -3,6 +3,14 @@ import { objectToBase64 } from 'qapp-core';
 // @ts-ignore - qortalRequest is available globally
 declare const qortalRequest: (params: any) => Promise<any>;
 
+/**
+ * Notify the host app to refresh subscriptions (e.g. after payment, join, re-encrypt).
+ * Safe to call after any important subscription action; errors are swallowed.
+ */
+export function notifySubscriptionsUpdate(): void {
+  qortalRequest({ action: 'UPDATE_SUBSCRIPTIONS' }).catch(() => {});
+}
+
 export type SubscriptionRecord = {
   si: string; // subscriptionIndexIdentifier (shortened for space)
   tx: string; // paymentTxSignature (shortened for space)
@@ -169,5 +177,6 @@ export async function subscribeToSubscription(args: {
     publishMultipleResources: args.publishMultipleResources,
   });
 
+  notifySubscriptionsUpdate();
   return { paymentTxSignature };
 }

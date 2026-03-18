@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 
-export type KickInfo = {
-  kicked: true;
-  reason: string | null;
-} | { kicked: false };
+export type KickInfo =
+  | {
+      kicked: true;
+      reason: string | null;
+    }
+  | { kicked: false };
 
 /**
  * Only when the user is confirmed not in the group, check if they previously
@@ -58,11 +60,7 @@ export function useKickedFromSubscription(
 
         const resources: Array<{ created?: number; updated?: number }> =
           await searchRes.json();
-        if (
-          !Array.isArray(resources) ||
-          resources.length === 0 ||
-          cancelled
-        ) {
+        if (!Array.isArray(resources) || resources.length === 0 || cancelled) {
           if (!cancelled) setKickInfo({ kicked: false });
           return;
         }
@@ -82,7 +80,8 @@ export function useKickedFromSubscription(
             : updated != null
               ? new Date(updated).getTime()
               : 0;
-        const afterTimestamp = Math.max(createdMs, updatedMs) || createdMs || updatedMs;
+        const afterTimestamp =
+          Math.max(createdMs, updatedMs) || createdMs || updatedMs;
         if (!afterTimestamp) {
           if (!cancelled) setKickInfo({ kicked: false });
           setLoading(false);
@@ -91,7 +90,7 @@ export function useKickedFromSubscription(
 
         // 2. Fetch kicks for this user/group after that timestamp
         const kicksUrl =
-          `/groups/kicks?` +
+          `/groups/kicks/member?` +
           `address=${encodeURIComponent(userAddress)}&` +
           `groupId=${groupId}&` +
           `limit=20&` +
@@ -129,13 +128,7 @@ export function useKickedFromSubscription(
     return () => {
       cancelled = true;
     };
-  }, [
-    enabled,
-    groupId,
-    detailsIdentifier,
-    userAddress,
-    userName,
-  ]);
+  }, [enabled, groupId, detailsIdentifier, userAddress, userName]);
 
   return { kickInfo, loading };
 }

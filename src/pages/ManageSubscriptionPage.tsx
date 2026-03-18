@@ -64,7 +64,11 @@ import { useSubscriberPaymentStatus } from '../hooks/useSubscriberPaymentStatus'
 import { useGroupJoinRequests } from '../hooks/useGroupJoinRequests';
 import { useValidateJoinRequests } from '../hooks/useValidateJoinRequests';
 import { useValidateGroupKeys } from '../hooks/useValidateGroupKeys';
-import { inviteToGroup, kickFromGroup } from '../lib/subscriptionPayment';
+import {
+  inviteToGroup,
+  kickFromGroup,
+  notifySubscriptionsUpdate,
+} from '../lib/subscriptionPayment';
 import { HOURLY_INTERVAL_DAYS, GRACE_20_MIN_DAYS } from '../constants';
 
 const AUTO_REFRESH_INTERVAL = 20 * 60 * 1000; // 2 minutes
@@ -512,6 +516,7 @@ export function ManageSubscriptionPage() {
         action: 'REENCRYPT_GROUP_KEYS',
         groupId: groupId,
       });
+      notifySubscriptionsUpdate();
 
       // Add to pending owner actions atom (reactive)
       if (auth?.address) {

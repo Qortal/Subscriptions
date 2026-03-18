@@ -30,6 +30,7 @@ import { useAllCurrentSubscriptionActions } from '../hooks/useAllCurrentSubscrip
 import { buildSubscriptionIdentifiers } from '../lib/subscriptionPublishing';
 import { SubscribeModal } from '../components/SubscribeModal';
 import {
+  notifySubscriptionsUpdate,
   publishSubscriptionRecord,
   sendSubscriptionPayment,
 } from '../lib/subscriptionPayment';
@@ -233,6 +234,7 @@ export function HomePage() {
       paymentTxSignature: paymentSignature,
       publishMultipleResources,
     });
+    notifySubscriptionsUpdate();
   };
 
   const handlePayNowComplete = () => {
