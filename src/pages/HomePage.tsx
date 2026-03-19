@@ -7,7 +7,7 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
+  // TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -68,14 +68,14 @@ export function HomePage() {
   const [payingSubscriptionId, setPayingSubscriptionId] = useState<
     string | null
   >(null);
-  const [testGroupId, setTestGroupId] = useState('');
+  // const [testGroupId, setTestGroupId] = useState('');
 
-  const handleOpenSubscriptionByGroupId = () => {
-    const id = parseInt(testGroupId.trim(), 10);
-    if (!Number.isNaN(id) && id > 0) {
-      navigate(`/subscription/subscription-${id}`);
-    }
-  };
+  // const handleOpenSubscriptionByGroupId = () => {
+  //   const id = parseInt(testGroupId.trim(), 10);
+  //   if (!Number.isNaN(id) && id > 0) {
+  //     navigate(`/subscription/subscription-${id}`);
+  //   }
+  // };
   const isRefreshingRef = useRef(false);
 
   const {
