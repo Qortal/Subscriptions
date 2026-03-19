@@ -33,8 +33,6 @@ import {
 } from '../lib/subscriptionPublishing';
 import {
   useTestIdentifiers,
-  HOURLY_INTERVAL_DAYS,
-  GRACE_20_MIN_DAYS,
 } from '../constants';
 import { cachePendingSubscription } from '../lib/pendingTransactionsCache';
 
@@ -117,7 +115,7 @@ export function CreateSubscriptionPage() {
 
   const [title, setTitle] = useState('');
   const [amountQortInput, setAmountQortInput] = useState('10');
-  const [intervalDays, setIntervalDays] = useState<number>(30);
+  const intervalDays = 30;
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState('');
   const [perksText, setPerksText] = useState('');
@@ -173,7 +171,6 @@ export function CreateSubscriptionPage() {
     description,
     graceDays,
     group,
-    intervalDays,
     ownerAddress,
     ownerName,
     perks,
@@ -188,7 +185,7 @@ export function CreateSubscriptionPage() {
 
   const steps = [t('core:create_step_choose_group'), t('core:create_step_pricing'), t('core:create_step_details')];
 
-  const graceOptions = [GRACE_20_MIN_DAYS, 3, 5, 7] as const;
+  const graceOptions = [3, 5, 7] as const;
 
   const isPriceValid =
     amountQortInput.trim() !== '' &&
@@ -405,21 +402,12 @@ export function CreateSubscriptionPage() {
                   inputProps={{ min: 1, step: 0.01 }}
                   fullWidth
                 />
-                <FormControl fullWidth>
-                  <InputLabel id="interval-label">{t('core:create_billing_interval')}</InputLabel>
-                  <Select
-                    labelId="interval-label"
-                    label={t('core:create_billing_interval')}
-                    value={intervalDays}
-                    onChange={(e) => setIntervalDays(Number(e.target.value))}
-                  >
-                    <MenuItem value={HOURLY_INTERVAL_DAYS}>
-                      {t('core:create_hourly_testing')}
-                    </MenuItem>
-                    <MenuItem value={1}>{t('core:create_daily_1')}</MenuItem>
-                    <MenuItem value={30}>{t('core:create_monthly_30')}</MenuItem>
-                  </Select>
-                </FormControl>
+                <TextField
+                  label={t('core:create_billing_interval')}
+                  value={t('core:create_monthly_30')}
+                  disabled
+                  fullWidth
+                />
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -431,9 +419,6 @@ export function CreateSubscriptionPage() {
                     value={graceDays}
                     onChange={(e) => setGraceDays(Number(e.target.value))}
                   >
-                    <MenuItem value={GRACE_20_MIN_DAYS}>
-                      {t('core:create_20_min_testing')}
-                    </MenuItem>
                     {[3, 5, 7].map((d) => (
                       <MenuItem key={d} value={d}>
                         {t('core:create_days', { count: d })}
@@ -445,8 +430,8 @@ export function CreateSubscriptionPage() {
 
               <Alert severity="info">
                 {t('core:create_billing_grace_info', {
-                  interval: intervalDays === HOURLY_INTERVAL_DAYS ? 'hourly' : intervalDays === 1 ? 'daily' : 'monthly',
-                  grace: graceDays < 0.1 ? '20-min' : `${graceDays}-day`,
+                  interval: 'monthly',
+                  grace: `${graceDays}-day`,
                 })}
               </Alert>
             </Stack>

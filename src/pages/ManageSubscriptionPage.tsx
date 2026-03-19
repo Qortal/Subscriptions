@@ -69,8 +69,6 @@ import {
   kickFromGroup,
   notifySubscriptionsUpdate,
 } from '../lib/subscriptionPayment';
-import { HOURLY_INTERVAL_DAYS, GRACE_20_MIN_DAYS } from '../constants';
-
 const AUTO_REFRESH_INTERVAL = 20 * 60 * 1000; // 2 minutes
 
 type AnyGroup = Record<string, unknown>;
@@ -193,7 +191,7 @@ export function ManageSubscriptionPage() {
 
   const [title, setTitle] = useState('');
   const [priceQortInput, setPriceQortInput] = useState<string>('1');
-  const [intervalDays, setIntervalDays] = useState<number>(30);
+  const intervalDays = 30;
   const [graceDays, setGraceDays] = useState<number>(3);
   const [description, setDescription] = useState('');
   const [perks, setPerks] = useState<string[]>([]);
@@ -317,9 +315,6 @@ export function ManageSubscriptionPage() {
     if (anyDetails.amountQort != null) {
       const n = Number(anyDetails.amountQort);
       if (Number.isFinite(n)) setPriceQortInput(String(n));
-    }
-    if (typeof anyDetails.intervalDays === 'number') {
-      setIntervalDays(anyDetails.intervalDays);
     }
     if (typeof anyDetails.graceDays === 'number') {
       setGraceDays(anyDetails.graceDays);
@@ -808,12 +803,7 @@ export function ManageSubscriptionPage() {
   const revenueQort =
     Math.round((paidCount + graceCount) * priceQort * 100) / 100;
 
-  const revenueLabel =
-    intervalDays === HOURLY_INTERVAL_DAYS
-      ? t('core:manage_qort_hr')
-      : intervalDays === 1
-        ? t('core:manage_qort_day')
-        : t('core:manage_qort_mo');
+  const revenueLabel = t('core:manage_qort_mo');
 
   const countdownMins = Math.floor(countdown / 60);
   const countdownSecs = String(countdown % 60).padStart(2, '0');
@@ -931,23 +921,12 @@ export function ManageSubscriptionPage() {
                     inputProps={{ min: 0, step: 0.01 }}
                     fullWidth
                   />
-                  <FormControl fullWidth>
-                    <InputLabel id="interval-label">
-                      {t('core:manage_billing_interval')}
-                    </InputLabel>
-                    <Select
-                      labelId="interval-label"
-                      label={t('core:manage_billing_interval')}
-                      value={intervalDays}
-                      onChange={(e) => setIntervalDays(Number(e.target.value))}
-                    >
-                      <MenuItem value={HOURLY_INTERVAL_DAYS}>
-                        {t('core:manage_hourly_testing')}
-                      </MenuItem>
-                      <MenuItem value={1}>{t('core:manage_daily_1')}</MenuItem>
-                      <MenuItem value={30}>{t('core:manage_monthly_30')}</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    label={t('core:manage_billing_interval')}
+                    value={t('core:manage_monthly_30')}
+                    disabled
+                    fullWidth
+                  />
                 </Stack>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
@@ -959,19 +938,11 @@ export function ManageSubscriptionPage() {
                       value={graceDays}
                       onChange={(e) => setGraceDays(Number(e.target.value))}
                     >
-                      {![GRACE_20_MIN_DAYS, 3, 5, 7].includes(graceDays) &&
-                        (graceDays < 0.1 ? (
-                          <MenuItem value={graceDays}>
-                            {Math.round(graceDays * 24 * 60)} {t('core:manage_min_abbr')}
-                          </MenuItem>
-                        ) : (
-                          <MenuItem value={graceDays}>
-                            {t('core:manage_days', { count: graceDays })}
-                          </MenuItem>
-                        ))}
-                      <MenuItem value={GRACE_20_MIN_DAYS}>
-                        {t('core:manage_20_min_testing')}
-                      </MenuItem>
+                      {![3, 5, 7].includes(graceDays) && (
+                        <MenuItem value={graceDays}>
+                          {t('core:manage_days', { count: graceDays })}
+                        </MenuItem>
+                      )}
                       <MenuItem value={3}>{t('core:manage_days', { count: 3 })}</MenuItem>
                       <MenuItem value={5}>{t('core:manage_days', { count: 5 })}</MenuItem>
                       <MenuItem value={7}>{t('core:manage_days', { count: 7 })}</MenuItem>
