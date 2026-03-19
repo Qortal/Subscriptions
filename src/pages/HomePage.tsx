@@ -254,7 +254,9 @@ export function HomePage() {
             {t('core:home_title')}
           </Typography>
           <Typography variant="body1" sx={{ opacity: 0.85 }}>
-            {auth?.name ? t('core:home_welcome_name', { name: auth.name }) : null}
+            {auth?.name
+              ? t('core:home_welcome_name', { name: auth.name })
+              : null}
             {t('core:home_welcome_manage')}
           </Typography>
         </Box>
@@ -269,7 +271,7 @@ export function HomePage() {
       </Stack>
 
       {/* Test: open subscription by group ID */}
-      <Stack
+      {/* <Stack
         direction="row"
         spacing={1}
         alignItems="center"
@@ -299,7 +301,7 @@ export function HomePage() {
         >
           {t('core:home_open_as_subscriber')}
         </Button>
-      </Stack>
+      </Stack> */}
 
       {/* Actions notification banner */}
       {allActions.totalActions > 0 && (
@@ -316,15 +318,23 @@ export function HomePage() {
         >
           <Typography variant="body2" fontWeight={600}>
             {allActions.totalActions === 1
-              ? t('core:home_pending_actions', { count: allActions.totalActions })
-              : t('core:home_pending_actions_plural', { count: allActions.totalActions })}
+              ? t('core:home_pending_actions', {
+                  count: allActions.totalActions,
+                })
+              : t('core:home_pending_actions_plural', {
+                  count: allActions.totalActions,
+                })}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
             {allActions.totalPendingJoinRequests > 0 && (
               <span>
                 {allActions.totalPendingJoinRequests === 1
-                  ? t('core:home_join_requests_to_review', { count: allActions.totalPendingJoinRequests })
-                  : t('core:home_join_requests_to_review_plural', { count: allActions.totalPendingJoinRequests })}
+                  ? t('core:home_join_requests_to_review', {
+                      count: allActions.totalPendingJoinRequests,
+                    })
+                  : t('core:home_join_requests_to_review_plural', {
+                      count: allActions.totalPendingJoinRequests,
+                    })}
               </span>
             )}
             {allActions.totalPendingJoinRequests > 0 &&
@@ -333,8 +343,12 @@ export function HomePage() {
             {allActions.totalNeedingReEncryption > 0 && (
               <span>
                 {allActions.totalNeedingReEncryption === 1
-                  ? t('core:home_need_re_encryption', { count: allActions.totalNeedingReEncryption })
-                  : t('core:home_need_re_encryption_plural', { count: allActions.totalNeedingReEncryption })}
+                  ? t('core:home_need_re_encryption', {
+                      count: allActions.totalNeedingReEncryption,
+                    })
+                  : t('core:home_need_re_encryption_plural', {
+                      count: allActions.totalNeedingReEncryption,
+                    })}
               </span>
             )}
           </Typography>
@@ -356,8 +370,12 @@ export function HomePage() {
         >
           <Typography variant="body2" fontWeight={600}>
             {activeNeedingPaymentCount === 1
-              ? t('core:home_subscriptions_need_payment', { count: activeNeedingPaymentCount })
-              : t('core:home_subscriptions_need_payment_plural', { count: activeNeedingPaymentCount })}
+              ? t('core:home_subscriptions_need_payment', {
+                  count: activeNeedingPaymentCount,
+                })
+              : t('core:home_subscriptions_need_payment_plural', {
+                  count: activeNeedingPaymentCount,
+                })}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
             {t('core:home_payment_due_message')}
@@ -425,9 +443,7 @@ export function HomePage() {
               </Stack>
             ) : (
               <Typography sx={{ opacity: 0.8 }}>
-                {subsError
-                  ? subsError
-                  : t('core:home_no_subscriptions_yet')}
+                {subsError ? subsError : t('core:home_no_subscriptions_yet')}
               </Typography>
             )
           ) : (
@@ -479,9 +495,7 @@ export function HomePage() {
               </Stack>
             ) : (
               <Typography sx={{ opacity: 0.8 }}>
-                {managedError
-                  ? managedError
-                  : t('core:home_not_managing_yet')}
+                {managedError ? managedError : t('core:home_not_managing_yet')}
               </Typography>
             )
           ) : (
