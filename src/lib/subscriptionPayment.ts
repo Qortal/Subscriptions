@@ -46,7 +46,7 @@ export async function sendSubscriptionPayment(
  */
 export async function sendJoinGroupRequest(groupId: number): Promise<void> {
   try {
-    const response = await qortalRequest({
+    await qortalRequest({
       action: 'JOIN_GROUP',
       groupId: groupId,
     });
@@ -65,7 +65,7 @@ export async function inviteToGroup(
   inviteeAddress: string
 ): Promise<void> {
   try {
-    const response = await qortalRequest({
+    await qortalRequest({
       action: 'INVITE_TO_GROUP',
       groupId: groupId,
       inviteeAddress: inviteeAddress,
