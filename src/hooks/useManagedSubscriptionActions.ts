@@ -39,7 +39,7 @@ export function useManagedSubscriptionActions(groupId: number | null) {
     null
   );
   const [priceQort, setPriceQort] = useState<number>(1);
-  const [intervalDays, setIntervalDays] = useState<number>(30);
+  const intervalDays = 30;
   const [graceDays, setGraceDays] = useState<number>(3);
   const [subscriptionStates, setSubscriptionStates] = useState<
     any[] | undefined
@@ -75,22 +75,8 @@ export function useManagedSubscriptionActions(groupId: number | null) {
             setSubscriptionStates(details.states);
             const currentState = details.states[details.states.length - 1];
             setPriceQort(currentState.price || 1);
-            const intervalDays =
-              currentState.interval === 'HOUR'
-                ? 1 / 24
-                : currentState.interval === 'DAY'
-                  ? 1
-                  : currentState.interval === 'WEEK'
-                    ? 7
-                    : currentState.interval === 'YEAR'
-                      ? 365
-                      : 30;
-            setIntervalDays(intervalDays);
           } else if (details.amountQort) {
             setPriceQort(Number(details.amountQort));
-          }
-          if (typeof details.intervalDays === 'number') {
-            setIntervalDays(details.intervalDays);
           }
           if (typeof details.graceDays === 'number') {
             setGraceDays(details.graceDays);

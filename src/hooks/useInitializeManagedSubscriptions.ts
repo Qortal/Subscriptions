@@ -90,7 +90,10 @@ export function useInitializeManagedSubscriptions(refreshKey = 0) {
             // Check if we have a match and it has a version suffix
             if (!matches || matches.length === 0) {
               // Check pending cache for newly created subscriptions
-              const pendingSubscription = getPendingSubscription(subscriptionId, ownerName);
+              const pendingSubscription = getPendingSubscription(
+                subscriptionId,
+                ownerName
+              );
               if (pendingSubscription) {
                 // Return the group info for pending subscription
                 let groupInfo;
@@ -114,9 +117,6 @@ export function useInitializeManagedSubscriptions(refreshKey = 0) {
 
             // Validate that the identifier has a version suffix (-v1, -v2, -v3, etc.)
             if (!latestIdentifier || !/-v\d+$/.test(latestIdentifier)) {
-              console.log(
-                `No versioned subscription found for group ${groupId}`
-              );
               return null;
             }
 

@@ -135,7 +135,7 @@ export const useValidateGroupKeys = (
           countStartPosition + 4
         );
         const count = new Uint32Array(countArray.buffer)[0];
-        console.log('count', count);
+
         setMemberCountFromSecretKeyData(count);
         setIsLoading(false);
       } catch (error) {}
@@ -156,16 +156,12 @@ export const useValidateGroupKeys = (
         action.groupId === groupId &&
         action.expiresAt > Date.now()
     );
-    console.log('recentReEncrypt', recentReEncrypt);
+
     // If there's a recent re-encryption action in cache, don't show alert/button
     if (recentReEncrypt) {
       return false;
     }
-    console.log(
-      'triedToFetchSecretKey',
-      triedToFetchSecretKey,
-      secretKeyPublishDate
-    );
+
     // Re-encryption check based purely on blockchain state (no cache involved)
     if (triedToFetchSecretKey && !secretKeyPublishDate) return true;
     if (

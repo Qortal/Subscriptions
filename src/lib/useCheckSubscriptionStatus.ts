@@ -172,7 +172,6 @@ export function useCheckSubscriptionStatusLib(
     }
 
     if (!address || !groupId || !identifierOperations) {
-      console.log('[useCheckSubscriptionStatus] Missing required parameters');
       setLoading(false);
       return;
     }

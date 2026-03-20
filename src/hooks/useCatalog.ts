@@ -9,11 +9,8 @@ import type { SubscriptionFullDetails } from '../types/subscription';
 import { useOwnedGroups } from './useOwnedGroups';
 
 function intervalDaysToBillingInterval(
-  intervalDays: number
+  _intervalDays: number
 ): 'hourly' | 'daily' | 'monthly' | 'yearly' {
-  if (intervalDays < 0.1) return 'hourly';
-  if (intervalDays === 1) return 'daily';
-  if (intervalDays >= 365) return 'yearly';
   return 'monthly';
 }
 

@@ -52,7 +52,6 @@ export async function sendJoinGroupRequest(groupId: number): Promise<void> {
     });
 
     // The JOIN_GROUP request doesn't return anything, it just throws on error
-    console.log('Join group request sent successfully', response);
   } catch (error: any) {
     throw new Error(error?.message ?? 'Failed to send join group request');
   }
@@ -72,8 +71,6 @@ export async function inviteToGroup(
       inviteeAddress: inviteeAddress,
       inviteTime: 10800,
     });
-
-    console.log('Invite sent successfully', response);
   } catch (error: any) {
     throw new Error(error?.message ?? 'Failed to invite user to group');
   }
@@ -84,12 +81,10 @@ export async function inviteToGroup(
  */
 export async function leaveGroup(groupId: number): Promise<void> {
   try {
-    const response = await qortalRequest({
+    await qortalRequest({
       action: 'LEAVE_GROUP',
       groupId: groupId,
     });
-
-    console.log('Left group successfully', response);
   } catch (error: any) {
     throw new Error(error?.message ?? 'Failed to leave group');
   }
@@ -103,14 +98,12 @@ export async function kickFromGroup(
   memberAddress: string
 ): Promise<void> {
   try {
-    const response = await qortalRequest({
+    await qortalRequest({
       action: 'KICK_FROM_GROUP',
       groupId: groupId,
       qortalAddress: memberAddress,
       reason: 'subscriptions:payment-overdue',
     });
-
-    console.log('Member kicked successfully', response);
   } catch (error: any) {
     throw new Error(error?.message ?? 'Failed to kick member from group');
   }
@@ -134,7 +127,6 @@ export async function publishSubscriptionRecord(args: {
   };
 
   const recordBase64 = await objectToBase64(subscriptionRecord);
-  console.log('test', recordBase64);
   await args.publishMultipleResources([
     {
       service: 'PRODUCT',

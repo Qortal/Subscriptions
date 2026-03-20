@@ -38,11 +38,8 @@ function getGroupName(group: AnyGroup, unnamedLabel: string): string {
 }
 
 function intervalDaysToBillingInterval(
-  intervalDays: number
+  _intervalDays: number
 ): 'hourly' | 'daily' | 'monthly' | 'yearly' {
-  if (intervalDays < 0.1) return 'hourly';
-  if (intervalDays === 1) return 'daily';
-  if (intervalDays >= 365) return 'yearly';
   return 'monthly';
 }
 
@@ -56,7 +53,6 @@ export function ManagedSubscriptionCard(props: {
   const { fetchPublish } = usePublish(3, 'JSON');
   const [details, setDetails] = useState<SubscriptionFullDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
-  console.log('groupInfo', groupInfo);
   const groupId = useMemo(() => getGroupId(groupInfo), [groupInfo]);
   const unnamedLabel = t('core:managed_unnamed_group');
   const subscriptionId = useMemo(
@@ -64,7 +60,8 @@ export function ManagedSubscriptionCard(props: {
     [groupId]
   );
 
-  const { actions, loading: actionsLoading } = useManagedSubscriptionActions(groupId);
+  const { actions, loading: actionsLoading } =
+    useManagedSubscriptionActions(groupId);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,14 +131,7 @@ export function ManagedSubscriptionCard(props: {
   const memberCount = Math.max(0, rawMemberCount - 1); // Exclude the owner
 
   const gross = memberCount * (Number.isFinite(priceQort) ? priceQort : 0);
-  const revenueQort =
-    billingInterval === 'yearly'
-      ? Math.round((gross / 12) * 100) / 100
-      : billingInterval === 'hourly'
-        ? Math.round(gross * 24 * 30 * 100) / 100 // Convert to monthly estimate
-        : billingInterval === 'daily'
-          ? Math.round(gross * 30 * 100) / 100 // Convert to monthly estimate
-          : Math.round(gross * 100) / 100;
+  const revenueQort = Math.round(gross * 100) / 100;
 
   // Get unpaid count from actions hook
   const unpaidCount = actions.unpaidMembersCount;
@@ -214,8 +204,12 @@ export function ManagedSubscriptionCard(props: {
                       {actions.pendingJoinRequests > 0 && (
                         <div>
                           {actions.pendingJoinRequests === 1
-                            ? t('core:managed_pending_join_requests', { count: actions.pendingJoinRequests })
-                            : t('core:managed_pending_join_requests_plural', { count: actions.pendingJoinRequests })}
+                            ? t('core:managed_pending_join_requests', {
+                                count: actions.pendingJoinRequests,
+                              })
+                            : t('core:managed_pending_join_requests_plural', {
+                                count: actions.pendingJoinRequests,
+                              })}
                         </div>
                       )}
                       {actions.needsReEncryption && (
@@ -235,11 +229,15 @@ export function ManagedSubscriptionCard(props: {
               )}
             </Stack>
             <Typography sx={{ opacity: 0.8 }}>
-              {priceQort} QORT / {t(`core:billing_interval_${billingInterval}`, { defaultValue: billingInterval })}
+              {priceQort} QORT /{' '}
+              {t(`core:billing_interval_${billingInterval}`, {
+                defaultValue: billingInterval,
+              })}
             </Typography>
             {groupName && groupName !== title && (
               <Typography sx={{ opacity: 0.7, fontSize: '0.875rem' }}>
-                {t('core:card_group')}: {groupName} {groupId !== null && `(ID: ${groupId})`}
+                {t('core:card_group')}: {groupName}{' '}
+                {groupId !== null && `(ID: ${groupId})`}
               </Typography>
             )}
           </Box>

@@ -225,7 +225,6 @@ export function HomePage() {
         identifierOperations,
         lists,
       });
-    console.log('subscriptionIndexIdentifier', subscriptionIndexIdentifier);
     await publishSubscriptionRecord({
       subscriberName: auth.name,
       subscriberAddress: auth.address,
@@ -534,18 +533,7 @@ export function HomePage() {
                 )
               : payingSubscription.priceQort
           }
-          intervalLabel={(() => {
-            const bi =
-              currentActions.subscriptionDisplayOverrides[payingSubscription.id]
-                ?.billingInterval ?? payingSubscription.billingInterval;
-            return bi === 'hourly'
-              ? 'hour'
-              : bi === 'daily'
-                ? 'day'
-                : bi === 'yearly'
-                  ? 'year'
-                  : 'month';
-          })()}
+          intervalLabel="month"
           groupId={getGroupId(payingSubscription.groupInfo) ?? 0}
           onPayment={handleCardPayment}
           onJoinGroup={async () => {}}

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useGlobal } from 'qapp-core';
-import { getPendingSubscribeActionByGroup, getPendingLeaveGroup } from '../lib/pendingTransactionsCache';
+import {
+  getPendingSubscribeActionByGroup,
+  getPendingLeaveGroup,
+} from '../lib/pendingTransactionsCache';
 import { fetchSubscriptionIndexPrice } from './useSubscriptionIndexPrice';
 import {
   getPaidIntervalsFromAmount,
@@ -194,7 +197,7 @@ export function useCheckSubscriptionStatus(
             );
             if (dataResponse.ok) {
               const recordData = await dataResponse.json();
-              console.log('recordData', recordData);
+
               if (recordData && typeof recordData.si === 'string') {
                 existingIndex = recordData.si;
               }
@@ -217,7 +220,6 @@ export function useCheckSubscriptionStatus(
                   );
                   if (txResponse.ok) {
                     const txData = await txResponse.json();
-                    console.log('txData', txData);
                     paymentTimestamp = txData?.timestamp;
 
                     const typeOk =
@@ -231,13 +233,7 @@ export function useCheckSubscriptionStatus(
                         recordData.si
                       );
                       const expectedPrice = indexData?.priceQort ?? null;
-                      intervalDaysAtPayment =
-                        indexData?.intervalDays ?? intervalDaysAtPayment;
-                      console.log(
-                        'expectedPrice',
-                        expectedPrice,
-                        txData?.amount
-                      );
+
                       if (
                         expectedPrice != null &&
                         isMultipleOfUnitPrice(+txData?.amount, expectedPrice)
@@ -259,7 +255,7 @@ export function useCheckSubscriptionStatus(
             // Non-fatal: we still have hasPaymentRecord, just no locked-in index for renewal
           }
         }
-        console.log('paymentValid', paymentValid);
+
         if (!cancelled) {
           setExistingSubscriptionIndexIdentifier(existingIndex);
 
@@ -279,7 +275,6 @@ export function useCheckSubscriptionStatus(
             const subscriptionEndsAt =
               paymentTimestamp +
               paidIntervals * intervalDaysAtPayment * 24 * 60 * 60 * 1000;
-            console.log('subscriptionEndsAt', subscriptionEndsAt);
             const now = Date.now();
             if (now < subscriptionEndsAt) {
               setStatus('subscribed-paid');

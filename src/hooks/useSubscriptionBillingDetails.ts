@@ -43,7 +43,7 @@ export function useSubscriptionBillingDetails(
         if (!data) return null;
         const anyDetails = data as any;
         return {
-          intervalDays: typeof anyDetails.intervalDays === 'number' ? anyDetails.intervalDays : 30,
+          intervalDays: 30,
           graceDays: typeof anyDetails.graceDays === 'number' ? anyDetails.graceDays : 3,
           states: Array.isArray(anyDetails.states) ? anyDetails.states : undefined,
           status: (anyDetails.status === 'disabled' ? 'disabled' : 'active') as 'active' | 'disabled',

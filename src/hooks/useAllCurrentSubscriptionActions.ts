@@ -46,13 +46,6 @@ export type CurrentSubscriptionActions = {
   subscriptionPaymentIndexIdentifier: Record<string, string>;
 };
 
-function intervalDaysToBillingInterval(intervalDays: number): BillingInterval {
-  if (intervalDays < 0.1) return 'hourly';
-  if (intervalDays === 1) return 'daily';
-  if (intervalDays >= 365) return 'yearly';
-  return 'monthly';
-}
-
 export type SubscriptionState = {
   version: number;
   price: number;
@@ -129,7 +122,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 prefix: true,
                 limit: 1,
               });
-              console.log('paymentRecords', paymentRecords);
+
               let needsPayment = false;
               let displayOverride: {
                 priceQort: number;
@@ -156,7 +149,7 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 }
 
                 const parsed = parseProductRecordData(recordData);
-                console.log('parsed', parsed);
+
                 if (parsed) recordData = parsed;
                 if (parsed?.si) paymentIndexIdentifier = parsed.si;
                 if (!recordData || !recordData.tx) needsPayment = true;
@@ -170,9 +163,9 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                   const txData = await txResponse.json();
                   const paymentTs = txData?.timestamp;
                   const amountPaid = parseFloat(txData?.amount || '0');
-                  console.log('amountPaid', amountPaid);
+
                   if (paymentTs == null || amountPaid <= 0) needsPayment = true;
-                  console.log('paymentTs', paymentTs, amountPaid);
+
                   let expectedPrice: number;
                   let intervalDaysAtPayment: number;
                   let paidIntervals = 1;
@@ -186,32 +179,36 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                       subscription.ownerName,
                       recordData.si
                     );
-                    console.log('indexData', indexData);
                     if (indexData) {
                       expectedPrice = indexData.priceQort;
-                      intervalDaysAtPayment = indexData.intervalDays;
+                      intervalDaysAtPayment = 30;
                       if (!displayOverride) {
                         displayOverride = {
                           priceQort: indexData.priceQort,
-                          billingInterval: intervalDaysToBillingInterval(
-                            indexData.intervalDays
-                          ),
+                          billingInterval: 'monthly',
                         };
                       }
                     } else {
-                      // TODO: Handle error
-                      return;
+                      needsPayment = true;
+                      return {
+                        subscriptionId,
+                        needsPayment,
+                        displayOverride,
+                        expiresAt,
+                        paymentIndexIdentifier,
+                      };
                     }
                   } else {
-                    // TODO: Handle error
-                    return;
+                    needsPayment = true;
+                    return {
+                      subscriptionId,
+                      needsPayment,
+                      displayOverride,
+                      expiresAt,
+                      paymentIndexIdentifier,
+                    };
                   }
-                  console.log(
-                    'expectedPrice',
-                    expectedPrice,
-                    amountPaid,
-                    intervalDaysAtPayment
-                  );
+
                   if (!isMultipleOfUnitPrice(amountPaid, expectedPrice)) {
                     needsPayment = true;
                   } else {
@@ -235,6 +232,8 @@ export function useAllCurrentSubscriptionActions(currentSubscriptions: any[]) {
                 } catch (error) {
                   console.error('Error validating payment transaction:', error);
                 }
+              } else {
+                needsPayment = true;
               }
 
               return {

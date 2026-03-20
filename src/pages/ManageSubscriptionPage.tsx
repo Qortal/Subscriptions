@@ -1891,7 +1891,7 @@ export function ManageSubscriptionPage() {
                                 <Typography
                                   sx={{ textTransform: 'capitalize' }}
                                 >
-                                  {state.interval.toLowerCase()}
+                                  {'month'}
                                 </Typography>
                               </TableCell>
                               <TableCell>

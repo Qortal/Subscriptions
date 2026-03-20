@@ -116,7 +116,7 @@ export async function checkGroupHasSubscription(
 
     const groupData = await groupResponse.json();
     const groupOwner = groupData?.owner || groupData?.ownerAddress;
-    console.log('groupOwner', groupOwner);
+
     if (!groupOwner) {
       console.error('[checkGroupHasSubscription] Group has no owner');
       return { exists: false };

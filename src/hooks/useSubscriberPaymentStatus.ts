@@ -201,7 +201,7 @@ export function useSubscriberPaymentStatus(
               limit: 1,
               reverse: true, // Get most recent
             });
-            console.log('resources', resources);
+
             if (!resources || resources.length === 0) {
               return {
                 address,
@@ -224,7 +224,6 @@ export function useSubscriberPaymentStatus(
                 error
               );
             }
-            console.log('recordData', recordData);
             if (!recordData || !recordData.tx) {
               return {
                 address,
@@ -262,18 +261,11 @@ export function useSubscriberPaymentStatus(
                 }
                 // Validate amount matches the price that was active at payment time
                 else if (paymentTimestamp) {
-                  console.log(
-                    'subscriptionOwnerName',
-                    subscriptionOwnerName,
-                    recordData.si
-                  );
                   const indexData = await fetchSubscriptionIndexPrice(
                     subscriptionOwnerName!,
                     recordData.si
                   );
                   const expectedPrice = indexData?.priceQort ?? null;
-                  intervalDaysAtPayment =
-                    indexData?.intervalDays ?? intervalDays;
 
                   if (expectedPrice == null) {
                     validationError = 'Could not get price at time of payment';

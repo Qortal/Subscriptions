@@ -9,15 +9,6 @@ import {
 import type { MySubscription } from '../types/subscription';
 import type { SubscriptionFullDetails } from '../types/subscription';
 
-function intervalDaysToBillingInterval(
-  intervalDays: number
-): 'hourly' | 'daily' | 'monthly' | 'yearly' {
-  if (intervalDays < 0.1) return 'hourly';
-  if (intervalDays === 1) return 'daily';
-  if (intervalDays >= 365) return 'yearly';
-  return 'monthly';
-}
-
 function addDaysISO(days: number) {
   const ms = Math.max(0, days) * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms).toISOString().slice(0, 10);
@@ -139,20 +130,15 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
                 details && anyDetails?.amountQort != null
                   ? Number(anyDetails.amountQort)
                   : 1;
-              const intervalDays =
-                details && typeof anyDetails?.intervalDays === 'number'
-                  ? anyDetails.intervalDays
-                  : 30;
-
               const sub: MySubscription = {
                 id: subscriptionId,
                 title,
                 ownerName: ownerPrimaryName,
                 groupInfo: g,
                 priceQort: Number.isFinite(amountQort) ? amountQort : 1,
-                billingInterval: intervalDaysToBillingInterval(intervalDays),
+                billingInterval: 'monthly',
                 status: 'active',
-                nextPaymentDue: addDaysISO(intervalDays),
+                nextPaymentDue: addDaysISO(30),
                 subscriptionDisabled: anyDetails?.status === 'disabled',
               };
 
@@ -220,20 +206,15 @@ export function useInitializeMySubscriptions(refreshKey = 0) {
                 details && anyDetails?.amountQort != null
                   ? Number(anyDetails.amountQort)
                   : 1;
-              const intervalDays =
-                details && typeof anyDetails?.intervalDays === 'number'
-                  ? anyDetails.intervalDays
-                  : 30;
-
               const sub: MySubscription = {
                 id: subscriptionId,
                 title,
                 ownerName: ownerPrimaryName,
                 groupInfo: { ...groupInfo, id: groupId, isPending: true },
                 priceQort: Number.isFinite(amountQort) ? amountQort : 1,
-                billingInterval: intervalDaysToBillingInterval(intervalDays),
+                billingInterval: 'monthly',
                 status: 'paused', // Use 'paused' status for pending approval
-                nextPaymentDue: addDaysISO(intervalDays),
+                nextPaymentDue: addDaysISO(30),
                 subscriptionDisabled: anyDetails?.status === 'disabled',
               };
 

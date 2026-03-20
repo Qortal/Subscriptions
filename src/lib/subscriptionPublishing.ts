@@ -85,7 +85,8 @@ export function parseOnChainIndexData(
   if (parts.length < 5 || parts[0] !== 'qsub1') return null;
   const amt = parseFloat(parts[2]);
   let intervalDays = parseFloat(parts[3]);
-  if (Number.isNaN(amt) || Number.isNaN(intervalDays) || intervalDays < 0) return null;
+  if (Number.isNaN(amt) || Number.isNaN(intervalDays) || intervalDays < 0)
+    return null;
   if (intervalDays === 0) intervalDays = 1 / 24; // 0 stored for hourly
   return { priceQort: amt, intervalDays };
 }
@@ -369,21 +370,7 @@ export async function publishSubscription(args: {
   const onChainData = encodeOnChainIndexData(args.index);
 
   const indexBase64 = utf8ToBase64(onChainData);
-  console.log(
-    'test',
-    {
-      service: 'DOCUMENT',
-      name: args.ownerName,
-      identifier: args.detailsIdentifier,
-      data64: detailsBase64,
-    },
-    {
-      service: 'DOCUMENT',
-      name: args.ownerName,
-      identifier: args.indexIdentifier,
-      data64: indexBase64,
-    }
-  );
+
   await args.publishMultipleResources([
     {
       service: 'DOCUMENT',

@@ -145,10 +145,11 @@ export function SubscriptionPage() {
 
   // Use catalog item if available, otherwise use fetched subscription
   const item = catalogItem || fetchedSubscription;
-  console.log('item', item);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>(
+    'success'
+  );
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
   const [justSubscribed, setJustSubscribed] = useState(false);
   const [leaveGroupDialogOpen, setLeaveGroupDialogOpen] = useState(false);
@@ -193,27 +194,22 @@ export function SubscriptionPage() {
   );
 
   // Locked-in price/interval from subscriber's PRODUCT record (si) → index DOCUMENT
-  const { priceQort: indexPriceQort, intervalDays: indexIntervalDays } =
-    useSubscriptionIndexPrice(
-      item?.ownerName ?? null,
-      existingSubscriptionIndexIdentifier,
-      !!(
-        item &&
-        userIsSubscribed &&
-        !isOwner &&
-        existingSubscriptionIndexIdentifier
-      )
-    );
+  const { priceQort: indexPriceQort } = useSubscriptionIndexPrice(
+    item?.ownerName ?? null,
+    existingSubscriptionIndexIdentifier,
+    !!(
+      item &&
+      userIsSubscribed &&
+      !isOwner &&
+      existingSubscriptionIndexIdentifier
+    )
+  );
 
   // Check if subscription is disabled (from fetched details; item from catalog/fetch doesn't include status)
   const isDisabled = item && billingDetails?.status === 'disabled';
 
   const kickBanEnabled =
-    !!item &&
-    !isOwner &&
-    !isMember &&
-    !!auth?.address &&
-    !checkingSubscription;
+    !!item && !isOwner && !isMember && !!auth?.address && !checkingSubscription;
 
   // When not in group, check if user is banned (takes precedence over kick)
   const { isBanned, banInfo } = useBannedFromGroup(
@@ -299,17 +295,7 @@ export function SubscriptionPage() {
       : userIsSubscribed && !isOwner && renewalPrice !== item?.priceQort
         ? renewalPrice
         : (item?.priceQort ?? 0);
-  const displayIntervalDays =
-    userIsSubscribed && !isOwner && indexIntervalDays != null
-      ? indexIntervalDays
-      : (billingDetails?.intervalDays ?? 30);
-  const displayIntervalLabel = useMemo(() => {
-    const days = displayIntervalDays;
-    if (days < 0.1) return 'hour';
-    if (days === 1) return 'day';
-    if (days >= 365) return 'year';
-    return 'month';
-  }, [displayIntervalDays]);
+  const displayIntervalLabel = 'month';
 
   const handleOpenSubscribeModal = () => {
     if (!auth?.name || !auth?.address) {
@@ -468,7 +454,8 @@ export function SubscriptionPage() {
 
   // Track loading state to prevent concurrent fetches
   useEffect(() => {
-    isRefreshingRef.current = checkingSubscription || checkingJoinRequests || checkingGroupKeys;
+    isRefreshingRef.current =
+      checkingSubscription || checkingJoinRequests || checkingGroupKeys;
   }, [checkingSubscription, checkingJoinRequests, checkingGroupKeys]);
 
   const handleRefresh = () => {
@@ -549,7 +536,10 @@ export function SubscriptionPage() {
           {item.title}
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip label={`${t('core:sub_owner')}: ${item.ownerName}`} variant="outlined" />
+          <Chip
+            label={`${t('core:sub_owner')}: ${item.ownerName}`}
+            variant="outlined"
+          />
           <Chip label={item.ownerAddress} variant="outlined" />
           {groupName && (
             <Chip
@@ -558,8 +548,13 @@ export function SubscriptionPage() {
               color="primary"
             />
           )}
-          <Chip label={`${t('core:sub_group_id')}: ${item.groupId}`} variant="outlined" />
-          {groupLoading && <Chip label={t('core:sub_loading_group')} variant="outlined" />}
+          <Chip
+            label={`${t('core:sub_group_id')}: ${item.groupId}`}
+            variant="outlined"
+          />
+          {groupLoading && (
+            <Chip label={t('core:sub_loading_group')} variant="outlined" />
+          )}
         </Stack>
       </Stack>
 
@@ -650,7 +645,10 @@ export function SubscriptionPage() {
                       variant="caption"
                       sx={{ opacity: 0.6, fontStyle: 'italic' }}
                     >
-                      {t('core:sub_rate_locked', { locked: displayPrice, current: item.priceQort })}
+                      {t('core:sub_rate_locked', {
+                        locked: displayPrice,
+                        current: item.priceQort,
+                      })}
                     </Typography>
                   )}
 
@@ -701,10 +699,9 @@ export function SubscriptionPage() {
                           sx={{
                             opacity: 0.85,
                             fontWeight: 600,
-                            color:
-                              expiryDisplay.isExpired
-                                ? 'error.main'
-                                : 'text.secondary',
+                            color: expiryDisplay.isExpired
+                              ? 'error.main'
+                              : 'text.secondary',
                           }}
                         >
                           {expiryDisplay.timeLeft}
@@ -751,9 +748,7 @@ export function SubscriptionPage() {
                     variant="contained"
                     onClick={handleOpenSubscribeModal}
                     disabled={
-                      checkingSubscription ||
-                      checkingJoinRequests ||
-                      isBanned
+                      checkingSubscription || checkingJoinRequests || isBanned
                     }
                   >
                     {checkingSubscription || checkingJoinRequests
@@ -785,9 +780,7 @@ export function SubscriptionPage() {
           {checkingGroupKeys ? (
             <Alert severity="info">{t('core:sub_checking_encryption')}</Alert>
           ) : isInGroupKeys ? (
-            <Alert severity="success">
-              {t('core:sub_have_access')}
-            </Alert>
+            <Alert severity="success">{t('core:sub_have_access')}</Alert>
           ) : (
             <Alert severity="warning">
               <Typography variant="body2" fontWeight={600} gutterBottom>
