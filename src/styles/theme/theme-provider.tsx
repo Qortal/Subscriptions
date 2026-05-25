@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { ThemeProvider } from '@emotion/react';
+import { ThemeProvider } from '@mui/material/styles';
 import { lightTheme, darkTheme } from './theme';
 import { CssBaseline } from '@mui/material';
 import { EnumTheme, themeAtom } from '../../state/global/system';

@@ -8,7 +8,12 @@ export function SubscriptionCardSkeleton(props: {
   const { titleWidth = 240, subtitleWidth = 180, actionWidth = 150 } = props;
 
   return (
-    <Card variant="outlined">
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
+        backgroundColor: theme.palette.background.paper,
+      })}
+    >
       <CardContent>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -33,5 +38,4 @@ export function SubscriptionCardSkeleton(props: {
     </Card>
   );
 }
-
 

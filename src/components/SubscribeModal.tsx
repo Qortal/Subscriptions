@@ -231,8 +231,18 @@ export function SubscribeModal({
       maxWidth="sm"
       fullWidth
       disableEscapeKeyDown={isProcessing}
+      PaperProps={{
+        sx: {
+          overflow: 'hidden',
+        },
+      }}
     >
-      <DialogTitle>
+      <DialogTitle
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.surface,
+          borderBottom: `1px solid ${theme.palette.border.subtle}`,
+        })}
+      >
         <Typography variant="h6" fontWeight={800}>
           {t('core:modal_renew_subscribe', { action: isRenewal ? t('core:modal_renew') : t('core:modal_subscribe_to'), title: subscriptionTitle })}
         </Typography>
@@ -243,7 +253,7 @@ export function SubscribeModal({
         )}
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent sx={{ pt: 2.5 }}>
         <Stack spacing={3}>
           <Stepper activeStep={getStepIndex()} alternativeLabel>
             {steps.map((label) => (
@@ -277,7 +287,11 @@ export function SubscribeModal({
                   onClick={() => setIntervalCount((n) => Math.max(1, n - 1))}
                   disabled={isProcessing || intervalCount <= 1}
                   size="large"
-                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                  sx={(theme) => ({
+                    backgroundColor: theme.palette.background.surface,
+                    border: `1px solid ${theme.palette.border.subtle}`,
+                    borderRadius: '8px',
+                  })}
                 >
                   <RemoveIcon />
                 </IconButton>
@@ -293,7 +307,11 @@ export function SubscribeModal({
                   onClick={() => setIntervalCount((n) => Math.min(12, n + 1))}
                   disabled={isProcessing || intervalCount >= 12}
                   size="large"
-                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                  sx={(theme) => ({
+                    backgroundColor: theme.palette.background.surface,
+                    border: `1px solid ${theme.palette.border.subtle}`,
+                    borderRadius: '8px',
+                  })}
                 >
                   <AddIcon />
                 </IconButton>
@@ -302,11 +320,11 @@ export function SubscribeModal({
               {/* Summary card */}
               <Box
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: '8px',
                   border: '1px solid',
-                  borderColor: 'divider',
+                  borderColor: 'border.subtle',
                   p: 2,
-                  backgroundColor: 'action.hover',
+                  backgroundColor: 'background.surface',
                 }}
               >
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -355,7 +373,7 @@ export function SubscribeModal({
                         {publishFee} QORT
                       </Typography>
                     </Stack>
-                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1, pt: 1 }}>
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'border.subtle', mt: 1, pt: 1 }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="body2" fontWeight={600}>
                           {t('core:modal_total_required')}
@@ -473,7 +491,12 @@ export function SubscribeModal({
         </Stack>
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.surface,
+          borderTop: `1px solid ${theme.palette.border.subtle}`,
+        })}
+      >
         {currentStep === 'payment' && (
           <>
             <Button onClick={handleClose} disabled={isProcessing}>

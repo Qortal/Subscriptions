@@ -176,7 +176,18 @@ export function ManagedSubscriptionCard(props: {
   }
 
   return (
-    <Card variant="outlined">
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
+        '&:hover': {
+          borderColor: theme.palette.border.main,
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? '0 10px 20px rgba(0, 0, 0, 0.16)'
+              : '0 14px 30px rgba(44, 38, 28, 0.09)',
+        },
+      })}
+    >
       <CardContent>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -184,7 +195,7 @@ export function ManagedSubscriptionCard(props: {
           justifyContent="space-between"
           alignItems={{ xs: 'flex-start', sm: 'center' }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Typography variant="h6" fontWeight={800}>
                 {title}
@@ -228,14 +239,14 @@ export function ManagedSubscriptionCard(props: {
                 </Tooltip>
               )}
             </Stack>
-            <Typography sx={{ opacity: 0.8 }}>
+            <Typography color="text.secondary" variant="body2">
               {priceQort} QORT /{' '}
               {t(`core:billing_interval_${billingInterval}`, {
                 defaultValue: billingInterval,
               })}
             </Typography>
             {groupName && groupName !== title && (
-              <Typography sx={{ opacity: 0.7, fontSize: '0.875rem' }}>
+              <Typography color="text.secondary" variant="body2">
                 {t('core:card_group')}: {groupName}{' '}
                 {groupId !== null && `(ID: ${groupId})`}
               </Typography>
@@ -272,7 +283,7 @@ export function ManagedSubscriptionCard(props: {
           </Stack>
         </Stack>
       </CardContent>
-      <CardActions sx={{ px: 2, pb: 2 }}>
+      <CardActions sx={{ px: 2, pb: 2, gap: 1, flexWrap: 'wrap' }}>
         <Button
           variant="contained"
           onClick={() => groupId !== null && onManage(groupId)}

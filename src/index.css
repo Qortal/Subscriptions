@@ -25,5 +25,14 @@
   padding: 0px;
   margin: 0px;
   box-sizing: border-box;
-  font-family: 'Inter';
+  font-family: 'Inter', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  overflow-x: hidden;
 }

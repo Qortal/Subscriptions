@@ -294,17 +294,32 @@ export function CreateSubscriptionPage() {
 
   return (
     <Stack spacing={2.5}>
-      <Box>
+      <Box
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: 1,
+        })}
+      >
         <Button size="small" onClick={() => navigate('/')}>
           {t('core:create_home_btn')}
         </Button>
       </Box>
 
-      <Stack spacing={0.5}>
+      <Stack
+        spacing={0.5}
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: { xs: 2, sm: 2.5 },
+        })}
+      >
         <Typography variant="h4" fontWeight={900}>
           {t('core:create_title')}
         </Typography>
-        <Typography sx={{ opacity: 0.8 }}>
+        <Typography color="text.secondary" variant="body2">
           {t('core:create_step_intro')}
         </Typography>
       </Stack>
@@ -472,7 +487,11 @@ export function CreateSubscriptionPage() {
 
           <Divider sx={{ my: 2 }} />
 
-          <Stack direction="row" spacing={1} justifyContent="space-between">
+          <Stack
+            direction={{ xs: 'column-reverse', sm: 'row' }}
+            spacing={1}
+            justifyContent="space-between"
+          >
             <Button
               variant="outlined"
               disabled={activeStep === 0}

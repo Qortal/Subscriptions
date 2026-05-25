@@ -106,7 +106,18 @@ export function CurrentSubscriptionCard(props: {
   }, [expiresAt, t]);
 
   return (
-    <Card variant="outlined">
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
+        '&:hover': {
+          borderColor: theme.palette.border.main,
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? '0 10px 20px rgba(0, 0, 0, 0.16)'
+              : '0 14px 30px rgba(44, 38, 28, 0.09)',
+        },
+      })}
+    >
       <CardContent>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -114,13 +125,15 @@ export function CurrentSubscriptionCard(props: {
           justifyContent="space-between"
           alignItems={{ xs: 'flex-start', sm: 'center' }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography variant="h6" fontWeight={800}>
               {s.title}
             </Typography>
-            <Typography sx={{ opacity: 0.8 }}>{t('core:card_owner')}: {s.ownerName}</Typography>
+            <Typography color="text.secondary" variant="body2">
+              {t('core:card_owner')}: {s.ownerName}
+            </Typography>
             {groupName && (
-              <Typography sx={{ opacity: 0.7, fontSize: '0.875rem' }}>
+              <Typography color="text.secondary" variant="body2">
                 {t('core:card_group')}: {groupName}
                 {groupId !== null && ` (ID: ${groupId})`}
               </Typography>
@@ -180,7 +193,7 @@ export function CurrentSubscriptionCard(props: {
           </Stack>
         </Stack>
       </CardContent>
-      <CardActions sx={{ px: 2, pb: 2 }}>
+      <CardActions sx={{ px: 2, pb: 2, gap: 1, flexWrap: 'wrap' }}>
         {!s.subscriptionDisabled && needsPayment && onPayNow && (
           <Button
             variant="contained"
@@ -198,5 +211,4 @@ export function CurrentSubscriptionCard(props: {
     </Card>
   );
 }
-
 

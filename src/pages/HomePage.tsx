@@ -2,7 +2,6 @@ import {
   Alert,
   Box,
   Button,
-  Divider,
   IconButton,
   Stack,
   Tab,
@@ -244,15 +243,26 @@ export function HomePage() {
   return (
     <Stack spacing={2.5}>
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
-        alignItems="flex-start"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        spacing={1.5}
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? '0 8px 18px rgba(0, 0, 0, 0.12)'
+              : '0 12px 28px rgba(44, 38, 28, 0.07)',
+          p: { xs: 2, sm: 2.5 },
+        })}
       >
         <Box>
-          <Typography variant="h4" fontWeight={800}>
+          <Typography variant="h4" fontWeight={900}>
             {t('core:home_title')}
           </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.85 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {auth?.name
               ? t('core:home_welcome_name', { name: auth.name })
               : null}
@@ -263,6 +273,10 @@ export function HomePage() {
           <IconButton
             onClick={handleRefresh}
             disabled={subsLoading || managedLoading}
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.surface,
+              border: `1px solid ${theme.palette.border.subtle}`,
+            })}
           >
             <RefreshIcon />
           </IconButton>
@@ -415,21 +429,26 @@ export function HomePage() {
         </Stack>
       </Box> */}
 
-      <Box>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
         <Tabs
           value={tab}
           onChange={(_, next) => setTab(next)}
           aria-label={t('core:home_tabs_aria')}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           <Tab label={t('core:home_tab_im_in')} />
           <Tab label={t('core:home_tab_manage')} />
         </Tabs>
-        <Divider sx={{ mt: 1 }} />
       </Box>
 
       {tab === 0 ? (
         <Stack spacing={1.5}>
-          <Typography variant="h6" fontWeight={700}>
+          <Typography variant="h6" fontWeight={800}>
             {t('core:home_subscriptions_im_in')}
           </Typography>
 
@@ -441,9 +460,18 @@ export function HomePage() {
                 ))}
               </Stack>
             ) : (
-              <Typography sx={{ opacity: 0.8 }}>
+              <Box
+                sx={(theme) => ({
+                  backgroundColor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.border.subtle}`,
+                  borderRadius: '8px',
+                  p: 2,
+                })}
+              >
+                <Typography color="text.secondary">
                 {subsError ? subsError : t('core:home_no_subscriptions_yet')}
-              </Typography>
+                </Typography>
+              </Box>
             )
           ) : (
             currentSubs.map((s) => {
@@ -476,7 +504,7 @@ export function HomePage() {
             justifyContent="space-between"
             alignItems={{ xs: 'flex-start', sm: 'center' }}
           >
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" fontWeight={800}>
               {t('core:home_subscriptions_manage')}
             </Typography>
 
@@ -493,9 +521,18 @@ export function HomePage() {
                 ))}
               </Stack>
             ) : (
-              <Typography sx={{ opacity: 0.8 }}>
+              <Box
+                sx={(theme) => ({
+                  backgroundColor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.border.subtle}`,
+                  borderRadius: '8px',
+                  p: 2,
+                })}
+              >
+                <Typography color="text.secondary">
                 {managedError ? managedError : t('core:home_not_managing_yet')}
-              </Typography>
+                </Typography>
+              </Box>
             )
           ) : (
             managedSubs.map((groupInfo) => {

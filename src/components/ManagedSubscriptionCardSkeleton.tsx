@@ -2,7 +2,12 @@ import { Box, Card, CardActions, CardContent, Skeleton, Stack } from '@mui/mater
 
 export function ManagedSubscriptionCardSkeleton() {
   return (
-    <Card variant="outlined">
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
+        backgroundColor: theme.palette.background.paper,
+      })}
+    >
       <CardContent>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -27,5 +32,4 @@ export function ManagedSubscriptionCardSkeleton() {
     </Card>
   );
 }
-
 

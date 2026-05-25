@@ -812,7 +812,17 @@ export function ManageSubscriptionPage() {
 
   return (
     <Stack spacing={2.5}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: 1,
+        })}
+      >
         <Button size="small" onClick={() => navigate('/')}>
           {t('core:manage_home_btn')}
         </Button>
@@ -821,13 +831,25 @@ export function ManageSubscriptionPage() {
             onClick={handleRefresh}
             disabled={membersLoading || joinRequestsLoading || paymentsLoading}
             size="small"
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.surface,
+              border: `1px solid ${theme.palette.border.subtle}`,
+            })}
           >
             <RefreshIcon />
           </IconButton>
         </Tooltip>
       </Stack>
 
-      <Stack spacing={1}>
+      <Stack
+        spacing={1}
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: { xs: 2, sm: 2.5 },
+        })}
+      >
         <Typography variant="h4" fontWeight={900}>
           {t('core:manage_title', { title: displayTitle })}
         </Typography>
@@ -1117,7 +1139,8 @@ export function ManageSubscriptionPage() {
                     : t('core:manage_no_members')}
                 </Typography>
               ) : (
-                <Table size="small">
+                <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 720 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>{t('core:manage_table_member')}</TableCell>
@@ -1341,6 +1364,7 @@ export function ManageSubscriptionPage() {
                     })}
                   </TableBody>
                 </Table>
+                </Box>
               )}
             </CardContent>
           </Card>
@@ -1539,7 +1563,8 @@ export function ManageSubscriptionPage() {
                       {t('core:manage_no_pending_requests')}
                     </Typography>
                   ) : (
-                    <Table size="small">
+                    <Box sx={{ overflowX: 'auto' }}>
+                    <Table size="small" sx={{ minWidth: 760 }}>
                       <TableHead>
                         <TableRow>
                           <TableCell>{t('core:manage_table_requester')}</TableCell>
@@ -1684,6 +1709,7 @@ export function ManageSubscriptionPage() {
                         })}
                       </TableBody>
                     </Table>
+                    </Box>
                   )}
 
                   {/* Footer actions */}
@@ -1842,7 +1868,8 @@ export function ManageSubscriptionPage() {
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Table size="small">
+                  <Box sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 620 }}>
                     <TableHead>
                       <TableRow>
                         <TableCell>{t('core:manage_table_version')}</TableCell>
@@ -1905,6 +1932,7 @@ export function ManageSubscriptionPage() {
                         })}
                     </TableBody>
                   </Table>
+                  </Box>
                 </CardContent>
               </Card>
             )}

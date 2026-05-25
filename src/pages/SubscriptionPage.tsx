@@ -514,7 +514,17 @@ export function SubscriptionPage() {
 
   return (
     <Stack spacing={2.5}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: 1,
+        })}
+      >
         <Button size="small" onClick={() => navigate('/')}>
           {t('core:sub_home_btn')}
         </Button>
@@ -525,13 +535,25 @@ export function SubscriptionPage() {
               checkingSubscription || checkingJoinRequests || checkingGroupKeys
             }
             size="small"
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.surface,
+              border: `1px solid ${theme.palette.border.subtle}`,
+            })}
           >
             <RefreshIcon />
           </IconButton>
         </Tooltip>
       </Stack>
 
-      <Stack spacing={1}>
+      <Stack
+        spacing={1}
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
+          borderRadius: '8px',
+          p: { xs: 2, sm: 2.5 },
+        })}
+      >
         <Typography variant="h4" fontWeight={900}>
           {item.title}
         </Typography>
@@ -565,7 +587,7 @@ export function SubscriptionPage() {
               <Typography variant="h6" fontWeight={800}>
                 {t('core:sub_about')}
               </Typography>
-              <Typography sx={{ opacity: 0.85, mt: 0.5 }}>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
                 {item.description}
               </Typography>
 
@@ -586,7 +608,10 @@ export function SubscriptionPage() {
         </Box>
 
         <Box flex={1}>
-          <Card variant="outlined">
+          <Card
+            variant="outlined"
+            sx={{ position: { md: 'sticky' }, top: { md: 84 } }}
+          >
             <CardContent>
               <Typography variant="h6" fontWeight={800}>
                 {t('core:sub_subscribe')}
